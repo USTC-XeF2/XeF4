@@ -2,7 +2,8 @@ import asyncio
 
 from nonebot import logger, on_command, on_message
 from nonebot.permission import SUPERUSER
-from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent
+from nonebot.params import CommandArg
+from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, Message
 from nonebot_plugin_group_config import GroupConfig, GroupConfigManager, GetGroupConfig
 
 from ..recorder import Recorder
@@ -18,7 +19,13 @@ import_libs = {
     "datetime": __import__("datetime")
 }
 
-gcm = GroupConfigManager.get_manager("chat")
+gcm = GroupConfigManager({
+    "response-level": "at",
+    "min-corresponding-length": 5,
+    "keywords": "",
+    "prompt": "",
+    "reply-interval": 1.5
+}, "chat")
 
 def _check_is_enable(event: GroupMessageEvent, group_config: GroupConfig = GetGroupConfig(gcm)):
     if group_config["response-level"] == "disabled":
@@ -34,6 +41,11 @@ reload_cmd = on_command(
     priority=0,
     block=True
 )
+prompt_cmd = on_command(
+    ("chat", "prompt"),
+    priority=0,
+    block=True
+)
 message_handler = on_message(rule=_check_is_enable, priority=99)
 
 @reload_cmd.handle()
@@ -43,6 +55,14 @@ async def _():
     except Exception as e:
         await reload_cmd.finish(f"重新加载模型失败: {e.args[0]}", reply_message=True)
     await reload_cmd.finish("重新加载模型成功", reply_message=True)
+
+@prompt_cmd.handle()
+async def _(args: Message = CommandArg(), group_config: GroupConfig = GetGroupConfig(gcm)):
+    text = args.extract_plain_text().strip()
+    if not text:
+        await prompt_cmd.finish(f"当前群聊提示词：\n{group_config['prompt']}", reply_message=True)
+    group_config["prompt"] = text
+    await prompt_cmd.finish("设置成功", reply_message=True)
 
 @message_handler.handle()
 async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetGroupConfig(gcm)):
@@ -58,11 +78,17 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
         [await generate_message(bot, e) for e in recorder.msg_history if e != event],
         new_messages
     )
-    preprocess_info = await get_preprocess_info(dumped_messages)
+    keywords = group_config["keywords"].split(",")
+    preprocess_info = await get_preprocess_info(dumped_messages, keywords)
     desire_threshold = 12 if event.is_tome() else 18
+    if keywords: desire_threshold += 1
+    
     if preprocess_info["search"]:
         desire_threshold -= 2
         logger.info(f"search: {preprocess_info['search']}")
+    if preprocess_info["keywords"]:
+        desire_threshold -= 3
+        logger.info(f"keywords: {preprocess_info['keywords']}/{len(keywords)}")
     logger.info(f"desire level: {preprocess_info['desire']}/{desire_threshold}")
     logger.info(f"reason: {preprocess_info['reason']}")
     if preprocess_info["desire"] < desire_threshold:
@@ -72,7 +98,7 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
         *map(search, preprocess_info["search"])
     ) if res]
     response = []
-    for msg in await chat(dumped_messages, search_info):
+    for msg in await chat(dumped_messages, group_config["prompt"], search_info):
         if isinstance(msg, str):
             type = "text"
             content = msg

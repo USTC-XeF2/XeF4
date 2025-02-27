@@ -9,7 +9,7 @@ async def get_name(bot: Bot, group_id: int, user_id: int) -> str:
     return info["card"] or info["nickname"]
 
 async def generate_message(bot: Bot, event: GroupMessageEvent) -> str:
-    format_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(event.time))
+    format_time = time.strftime("%H:%M:%S", time.localtime(event.time))
     sender_name = event.sender.card or event.sender.nickname
     content = ""
     for msg_seg in event.original_message:
