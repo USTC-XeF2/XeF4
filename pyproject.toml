@@ -1,6 +1,6 @@
 [project]
 name = "XeF4"
-version = "0.1.0"
+version = "0.1.1"
 description = "A comprehensive QQ group bot"
 readme = "README.md"
 requires-python = ">=3.9, <4.0"

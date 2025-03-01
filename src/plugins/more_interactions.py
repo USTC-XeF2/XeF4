@@ -1,3 +1,4 @@
+import time
 import random
 import asyncio
 
@@ -45,6 +46,8 @@ async def _(bot: Bot, group_config: GC = GetGC(gcm)):
             "sub_type": 1
         }))
 
+last_repeat: dict[int, tuple[str, int]] = {}
+
 @plus_one_handler.handle()
 async def _(bot: Bot, matcher: Matcher, event: GroupMessageEvent, group_config: GC = GetGC(gcm)):
     recorder = await Recorder.get(event.group_id, bot)
@@ -62,7 +65,11 @@ async def _(bot: Bot, matcher: Matcher, event: GroupMessageEvent, group_config: 
             count += 1
         else:
             break
+    rep_msg, rep_times = last_repeat.get(event.group_id, ("", 0))
+    if rep_msg == last_msg and time.time() - rep_times < group_config["plus-one-delay"]:
+        return
     if random.random() < (count-1)/(count+1):
+        last_repeat[event.group_id] = (last_msg, time.time())
         logger.info(f"plus one after {count} repeat: {last_msg}")
         await asyncio.sleep(group_config["plus-one-delay"])
         await plus_one_handler.finish(event.original_message)

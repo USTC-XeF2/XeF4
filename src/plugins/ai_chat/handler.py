@@ -78,7 +78,7 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
         [await generate_message(bot, e) for e in recorder.msg_history if e != event],
         new_messages
     )
-    keywords = group_config["keywords"].split(",")
+    keywords = group_config["keywords"].split(",") if group_config["keywords"] else []
     preprocess_info = await get_preprocess_info(dumped_messages, keywords)
     desire_threshold = 12 if event.is_tome() else 18
     if keywords: desire_threshold += 1
@@ -88,7 +88,7 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
         logger.info(f"search: {preprocess_info['search']}")
     if preprocess_info["keywords"]:
         desire_threshold -= 3
-        logger.info(f"keywords: {preprocess_info['keywords']}/{len(keywords)}")
+        logger.info(f"keywords: {','.join(preprocess_info['keywords'])}")
     logger.info(f"desire level: {preprocess_info['desire']}/{desire_threshold}")
     logger.info(f"reason: {preprocess_info['reason']}")
     if preprocess_info["desire"] < desire_threshold:
