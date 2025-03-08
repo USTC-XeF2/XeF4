@@ -12,7 +12,7 @@ from nonebot.adapters.minecraft import (
     Bot as MCBot,
     BaseChatEvent,
     BaseDeathEvent,
-    NoticeEvent
+    BaseJoinEvent
 )
 
 class Config(BaseModel):
@@ -26,11 +26,11 @@ def is_in_group(event: GroupMessageEvent):
 
 mc_msg_handler = on_type(BaseChatEvent, rule=startswith("#"))
 mc_death_handler = on_type(BaseDeathEvent)
-mc_notice_handler = on_type(NoticeEvent)
+mc_join_handler = on_type(BaseJoinEvent)
 group_cmd_handler = on_command(
     "mcc",
     rule=is_in_group,
-    aliases={("mcc", "time")},
+    aliases={("mcc", "time"), ("mcc", "player")},
     block=True
 )
 
@@ -58,17 +58,14 @@ async def _(event: BaseChatEvent):
 async def _(event: BaseDeathEvent):
     await send_to_qq(event.server_name, "", event.message)
 
-@mc_notice_handler.handle()
-async def _(event: NoticeEvent):
-    await send_to_qq(
-        event.server_name,
-        "",
-        f"{event.player.nickname} {'加入' if event.sub_type == "join" else '退出'}了游戏"
-    )
+@mc_join_handler.handle()
+async def _(event: BaseJoinEvent):
+    await send_to_qq(event.server_name, "", f"{event.player.nickname} 加入了游戏")
 
 help_msg = """
 /mcc <server-name> <message> - 发送消息到服务器
 /mcc.time <server-name> - 查询服务器时间
+/mcc.player <server-name> <player-name> - 查询玩家信息
 """
 
 @group_cmd_handler.handle()
@@ -104,3 +101,24 @@ async def _(
         f_hour = (hour + 6) % 24
         f_minute = int(minute * 60 / 1000)
         await group_cmd_handler.finish(f"当前游戏时间: {day}天 {f_hour}:{f_minute}", reply_message=True)
+    elif cmd_type == "player":
+        if len(parsed_args) == 1:
+            res = await mcbot.send_rcon_cmd(command="list")
+            await group_cmd_handler.finish(
+                f"当前玩家列表：{res[0].split(': ')[1].strip()}",
+                reply_message=True
+            )
+        c = {"Health": None, "XpLevel": None, "Pos": None}
+        try:
+            for i in c:
+                data = await mcbot.send_rcon_cmd(command=f"data get entity {parsed_args[1]} {i}")
+                c[i] = data[0].split(": ")[1].strip().replace("d", "").replace("f", "")
+        except:
+            await group_cmd_handler.finish("玩家不存在", reply_message=True)
+        text = f"玩家{parsed_args[1]}信息：\n"
+        text += f"生命值: {c['Health']}\n"
+        text += f"经验等级: {c['XpLevel']}\n"
+        pos = eval(c["Pos"])
+        pos = [round(float(i), 2) for i in pos]
+        text += f"坐标: {', '.join(map(str, pos))}"
+        await group_cmd_handler.finish(text, reply_message=True)

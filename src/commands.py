@@ -82,6 +82,7 @@ async def _server_info(servers: dict[str, dict[str, str]], name_or_ip: str):
         if "redirect" in server:
             server = servers[server["redirect"]]
         server_addr = server["url"]
+        server_name = f"{name_or_ip}({server_addr})"
     else:
         addr_pattern = r'^([a-zA-Z0-9.-]+)(?::(\d+))?$'
         match = re.match(addr_pattern, name_or_ip)
@@ -94,8 +95,10 @@ async def _server_info(servers: dict[str, dict[str, str]], name_or_ip: str):
             port = int(port)
             if not (0 < port < 65536):
                 return "端口号必须在1-65535之间"
+            server_name = name_or_ip
         else:
             port = 25565
+            server_name = f"{name_or_ip}(:25565)"
         server_addr = f"{host}:{port}"
 
     status = await _get_server_status(server_addr)
@@ -104,7 +107,6 @@ async def _server_info(servers: dict[str, dict[str, str]], name_or_ip: str):
             return "无法解析为Java服务器"
         else:
             return "服务器连接失败"
-    server_name = name_or_ip + ("" if name_or_ip == server_addr else f"({server_addr})")
     motd = "".join([i.strip(" ") for i in status.motd.parsed if isinstance(i, str)])
     info = f"{server_name}\n--------------------\n" \
             f"{motd}\n--------------------\n" \

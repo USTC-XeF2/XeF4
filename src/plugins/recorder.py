@@ -5,7 +5,7 @@ from nonebot.message import event_preprocessor
 from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, GroupRecallNoticeEvent
 
 class Config(BaseModel):
-    recorder_max_history_length: int = 30
+    recorder_max_history_length: int = 100
 
 config = get_plugin_config(Config)
 
