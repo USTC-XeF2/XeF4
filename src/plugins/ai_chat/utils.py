@@ -6,14 +6,16 @@ import requests
 
 from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, MessageSegment
 
+TIMEZONE = 28800  # UTC+8
+
 async def get_name(bot: Bot, group_id: int, user_id: int) -> str:
     info = await bot.get_group_member_info(group_id=group_id, user_id=user_id)
     return info["card"] or info["nickname"]
 
 image_storage = dict[str, str]()
 
-async def generate_message(bot: Bot, event: GroupMessageEvent) -> str:
-    format_time = time.strftime("%H:%M:%S", time.localtime(event.time))
+async def generate_message(bot: Bot, event: GroupMessageEvent, try_read_file: bool = False) -> str:
+    format_time = time.strftime("%H:%M:%S", time.gmtime(event.time + TIMEZONE))
     sender_name = event.sender.card or event.sender.nickname
     content = ""
     for msg_seg in event.original_message:
@@ -35,6 +37,17 @@ async def generate_message(bot: Bot, event: GroupMessageEvent) -> str:
                 )
                 content += f"[图片-{id}]"
                 image_storage[id] = msg_seg.data["url"]
+        elif msg_seg.type == "file":
+            if try_read_file and int(msg_seg.data["file_size"]) <= 4096:
+                file = (await bot.get_file(file_id=msg_seg.data["file_id"]))["file"]
+                try:
+                    with open(file) as rf:
+                        content = rf.read()
+                    break
+                except (OSError, ValueError):
+                    pass
+            name = msg_seg.data["file"]
+            content += f"[文件-{name}]"
     return f"[{format_time} {sender_name}]\n{content}"
 
 def get_dumped_messages(name: str, history_messages: list[str], new_messages: list[str]):

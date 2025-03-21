@@ -24,7 +24,7 @@ from src.plugins.command import Command
 from src.commands import poke, server_info
 
 Command("poke", poke, max_usage_times=5)
-Command("server-info", server_info, {"s"})
+Command("server-info", server_info, {"s"}, max_usage_times=15)
 
 if __name__ == "__main__":
     nonebot.run()

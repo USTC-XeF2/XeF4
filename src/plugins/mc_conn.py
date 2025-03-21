@@ -1,3 +1,4 @@
+import re
 from pydantic import BaseModel
 
 from nonebot import get_bot, get_plugin_config, logger, on_command, on_type
@@ -30,7 +31,7 @@ mc_join_handler = on_type(BaseJoinEvent)
 group_cmd_handler = on_command(
     "mcc",
     rule=is_in_group,
-    aliases={("mcc", "time"), ("mcc", "player")},
+    aliases={("mcc", "send"), ("mcc", "player"), ("mcc", "time")},
     block=True
 )
 
@@ -48,25 +49,30 @@ async def send_to_qq(server_name: str, username: str, message: str):
             )
 
 @mc_msg_handler.handle()
-async def _(event: BaseChatEvent):
+async def _(bot: MCBot, event: BaseChatEvent):
     text = event.get_plaintext()[1:]
     if text:
-        await send_to_qq(event.server_name, " " + event.get_user_id(), text)
-        await mc_msg_handler.finish("消息已发送")
+        await send_to_qq(event.server_name, " " + event.player.nickname, text)
+        await bot.send_rcon_cmd(command=f"msg {event.player.nickname} 消息已发送")
 
 @mc_death_handler.handle()
 async def _(event: BaseDeathEvent):
-    await send_to_qq(event.server_name, "", event.message)
+    if not event.player.nickname.startswith("bot_"):
+        await send_to_qq(event.server_name, "", event.message)
 
 @mc_join_handler.handle()
 async def _(event: BaseJoinEvent):
-    await send_to_qq(event.server_name, "", f"{event.player.nickname} 加入了游戏")
+    if not event.player.nickname.startswith("bot_"):
+        await send_to_qq(event.server_name, "", f"{event.player.nickname} 加入了游戏")
 
 help_msg = """
-/mcc <server-name> <message> - 发送消息到服务器
-/mcc.time <server-name> - 查询服务器时间
-/mcc.player <server-name> <player-name> - 查询玩家信息
+/mcc [server-name] - 切换到指定服务器
+/mcc.send <message> - 发送消息到服务器
+/mcc.player [player-name] - 查询玩家信息
+/mcc.time - 查询服务器时间
 """
+
+player_server_map = dict[str, str]()
 
 @group_cmd_handler.handle()
 async def _(
@@ -75,25 +81,34 @@ async def _(
     cmd: tuple[str, ...] = Command(),
     args: Message = CommandArg()
 ):
-    cmd_type = "chat" if len(cmd) == 1 else cmd[1]
     parsed_args = args.extract_plain_text().split()
     enabled_servers = config.mc_conn_config[str(event.group_id)]
-    if not parsed_args:
-        msg = help_msg[1:] + "\n可用服务器: " + ", ".join(enabled_servers)
+    if len(enabled_servers) == 1:
+        present_server = enabled_servers[0]
+    else:
+        present_server = player_server_map.get(event.get_session_id())
+    if len(cmd) == 1:
+        if not parsed_args:
+            msg = help_msg[1:] + "\n可用服务器: " + ", ".join(enabled_servers)
+            if present_server:
+                msg += f"\n当前服务器: {present_server}"
+        elif parsed_args[0] in enabled_servers:
+            player_server_map[event.get_session_id()] = parsed_args[0]
+            msg = f"已切换到服务器: {parsed_args[0]}"
+        else:
+            msg = "服务器不存在"
         await group_cmd_handler.finish(msg, reply_message=True)
-    if parsed_args[0] not in enabled_servers:
-        await group_cmd_handler.finish("服务器不存在", reply_message=True)
     try:
-        mcbot: MCBot = get_bot(parsed_args[0])
+        mcbot: MCBot = get_bot(present_server)
     except:
         await group_cmd_handler.finish("服务器未连接", reply_message=True)
-    if cmd_type == "chat":
-        if len(parsed_args) == 1:
+    if cmd[1] == "send":
+        if not parsed_args:
             await group_cmd_handler.finish("请输入要发送的消息内容", reply_message=True)
         name = event.sender.card or event.sender.nickname
-        await mcbot.send_msg(message=f"<Group {name}> " + " ".join(parsed_args[1:]))
+        await mcbot.send_msg(message=f"<Group {name}> " + " ".join(parsed_args))
         await bot.call_api("group_poke", group_id=event.group_id, user_id=event.user_id)
-    elif cmd_type == "time":
+    elif cmd[1] == "time":
         res = await mcbot.send_rcon_cmd(command="time query gametime")
         gametime = int(res[0].removeprefix("The time is "))
         day, daytime = divmod(gametime, 24000)
@@ -101,24 +116,24 @@ async def _(
         f_hour = (hour + 6) % 24
         f_minute = int(minute * 60 / 1000)
         await group_cmd_handler.finish(f"当前游戏时间: {day}天 {f_hour}:{f_minute}", reply_message=True)
-    elif cmd_type == "player":
-        if len(parsed_args) == 1:
+    elif cmd[1] == "player":
+        if not parsed_args:
             res = await mcbot.send_rcon_cmd(command="list")
             await group_cmd_handler.finish(
                 f"当前玩家列表：{res[0].split(': ')[1].strip()}",
                 reply_message=True
             )
-        c = {"Health": None, "XpLevel": None, "Pos": None}
+        c = {"Health": "", "XpLevel": "", "Pos": ""}
         try:
+            player = parsed_args[0]
             for i in c:
-                data = await mcbot.send_rcon_cmd(command=f"data get entity {parsed_args[1]} {i}")
-                c[i] = data[0].split(": ")[1].strip().replace("d", "").replace("f", "")
+                data = await mcbot.send_rcon_cmd(command=f"data get entity {player} {i}")
+                c[i] = data[0].split(": ")[1].strip()
+            text = f"玩家{player}信息：\n"
+            text += f"生命值: {c['Health'].removesuffix('f')}\n"
+            text += f"经验等级: {c['XpLevel']}\n"
+            pos_pattern = r"\[(-?\d+)\.\d+d,\s(-?\d+)\.\d+d,\s(-?\d+)\.\d+d\]"
+            text += f"坐标: {', '.join(re.search(pos_pattern, c['Pos']).groups())}"
         except:
             await group_cmd_handler.finish("玩家不存在", reply_message=True)
-        text = f"玩家{parsed_args[1]}信息：\n"
-        text += f"生命值: {c['Health']}\n"
-        text += f"经验等级: {c['XpLevel']}\n"
-        pos = eval(c["Pos"])
-        pos = [round(float(i), 2) for i in pos]
-        text += f"坐标: {', '.join(map(str, pos))}"
         await group_cmd_handler.finish(text, reply_message=True)

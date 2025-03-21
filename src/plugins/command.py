@@ -14,15 +14,18 @@ from nonebot_plugin_localstore import get_plugin_config_file
 ec_file = get_plugin_config_file("enable-commands.json")
 if not ec_file.exists():
     ec_file.write_text("{}")
+usage_times_dir = get_plugin_config_file("usage_times")
+if not usage_times_dir.exists():
+    usage_times_dir.mkdir(parents=True)
 
 class Command:
     commands = list['Command']()
-    def __init__(self, name: str, func, aliases: set[str] = None, max_usage_times: int = 10):
+    def __init__(self, name: str, func, aliases: set[str] = None, max_usage_times: int = -1):
         Command.commands.append(self)
         self.name = name
         self.func = func
         self.aliases = aliases or set()
-        self.max_usage_times = max_usage_times
+        self.max_usage_times = max_usage_times if max_usage_times >= 0 else float("inf")
         self.command_handler = on_command(
             self.name,
             rule=self.is_enable,
@@ -43,7 +46,7 @@ class Command:
         return self.name in enable_commands.get(str(event.group_id), [])
 
     async def check_usage_times(self, event: GroupMessageEvent):
-        times_file = get_plugin_config_file(time.strftime("%Y%m%d.json"))
+        times_file = usage_times_dir / time.strftime("%Y%m%d.json")
         times: dict[str, dict[str, int]]
         if times_file.exists():
             times = json.loads(times_file.read_text())

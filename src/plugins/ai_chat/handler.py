@@ -89,26 +89,40 @@ async def _(event: GroupMessageEvent):
     await clear_cmd.finish("清空成功", reply_message=True)
 
 @clear_prompt_cmd.handle()
-async def _(group_config: GroupConfig = GetGroupConfig(gcm)):
+async def _(event: GroupMessageEvent, group_config: GroupConfig = GetGroupConfig(gcm)):
     group_config["prompt"] = ""
+    last_clear_msg[event.group_id] = event.message_id
     await clear_prompt_cmd.finish("清空成功", reply_message=True)
 
 @prompt_cmd.handle()
-async def _(args: Message = CommandArg(), group_config: GroupConfig = GetGroupConfig(gcm)):
+async def _(
+    event: GroupMessageEvent,
+    args: Message = CommandArg(),
+    group_config: GroupConfig = GetGroupConfig(gcm)
+):
     text = args.extract_plain_text().strip()
     if not text:
         await prompt_cmd.finish(f"当前群聊提示词：\n{group_config['prompt']}", reply_message=True)
     group_config["prompt"] = text
+    last_clear_msg[event.group_id] = event.message_id
     await prompt_cmd.finish("设置成功", reply_message=True)
+
+uin_range: list[dict[str, str]] = None
 
 @message_handler.handle()
 async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetGroupConfig(gcm)):
+    global uin_range
+    if uin_range is None:
+        uin_range = await bot.get_robot_uin_range()
+    if any(int(r["minUin"]) <= event.user_id <= int(r["maxUin"]) for r in uin_range):
+        logger.info(f"ignore robot message: {event.user_id}")
+        return
     recorder = await Recorder.get(event.group_id, bot)
     image_storage.clear()
     new_messages = list[str]()
     e = event
     while e:
-        new_messages.append(await generate_message(bot, e))
+        new_messages.append(await generate_message(bot, e, try_read_file=True))
         e = recorder.get_reply_msg(e)
     history_messages = list[str]()
     for e in recorder.msg_history[::-1]:
@@ -134,7 +148,7 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
     if keywords: desire_threshold += 1
     
     if preprocess_info["search"]:
-        desire_threshold -= 2
+        desire_threshold -= 1
         logger.info(f"search: {preprocess_info['search']}")
     for k in preprocess_info["keywords"]:
         if k in keywords:
@@ -142,7 +156,9 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
             logger.info(f"keywords: {','.join(preprocess_info['keywords'])}")
     logger.info(f"desire level: {preprocess_info['desire']}/{desire_threshold}")
     logger.info(f"reason: {preprocess_info['reason']}")
-    if preprocess_info["desire"] < desire_threshold:
+    if preprocess_info["desire"] < desire_threshold or not recorder.get_msg(event.message_id):
+        if event.is_tome():
+            await bot.group_poke(group_id=event.group_id, user_id=event.user_id)
         return
 
     image_desc = []
@@ -171,7 +187,7 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
 
         if type == "text":
             logger.info(f"text: {content}")
-            response.append(content)
+            response.append(content.removesuffix("。"))
         elif type == "image":
             logger.info(f"image: {content}")
             url = await generate_image(content)
@@ -182,12 +198,15 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
             response.append(get_file_segment(msg["filename"], content.encode()))
         elif type == "fstring":
             try:
-                formatted_msg = eval(f'f"""{content}"""', import_libs)
+                formatted_msg: str = eval(f'f"""{content}"""', import_libs)
                 logger.info(f"fstring: {content} -> {formatted_msg}")
-                response.append(formatted_msg)
+                response.append(formatted_msg.removesuffix("。"))
             except Exception as e:
                 logger.error(f"failed to format fstring {content!r}: {e.args[0]}")
 
+    if not (response and recorder.get_msg(event.message_id)):
+        await bot.group_poke(group_id=event.group_id, user_id=event.user_id)
+        return
     interval = group_config["reply-interval"]
     await bot.send(event, response[0], reply_message=isinstance(response[0], str))
     for msg in response[1:]:

@@ -62,20 +62,17 @@ async def _get_server_status(url: str, max_try: int = 3):
     return False
 
 async def _server_info(servers: dict[str, dict[str, str]], name_or_ip: str):
-    if name_or_ip == "-l":
+    if not name_or_ip:
         return "服务器列表\n--------------------\n" + "\n".join(servers.keys())
     if name_or_ip == "-a":
         checked_server = {name: server for name, server in servers.items() if "url" in server}
-        info = "服务器状态列表\n--------------------"
+        info = "在线服务器状态列表\n--------------------"
         status_tasks = [_get_server_status(server["url"], max_try=2)
                         for server in checked_server.values()]
         status_results = await asyncio.gather(*status_tasks)
         for name, status in zip(checked_server.keys(), status_results):
-            info += f"\n{name}: "
-            if isinstance(status, bool):
-                info += "连接失败"
-            else:
-                info += f"{round(status.latency, 1)}ms {status.players.online}/{status.players.max}人在线"
+            if not isinstance(status, bool):
+                info += f"\n{name}: {round(status.latency, 1)}ms {status.players.online}/{status.players.max}人在线"
         return info
 
     if (server := servers.get(name_or_ip := name_or_ip.lower())):
@@ -84,22 +81,23 @@ async def _server_info(servers: dict[str, dict[str, str]], name_or_ip: str):
         server_addr = server["url"]
         server_name = f"{name_or_ip}({server_addr})"
     else:
-        addr_pattern = r'^([a-zA-Z0-9.-]+)(?::(\d+))?$'
+        addr_pattern = r'^(?:([a-zA-Z0-9.-]+)|(?:\[([a-f0-9:]+)\]))(?::(\d+))?$'
         match = re.match(addr_pattern, name_or_ip)
         if not match:
             return "服务器地址格式错误"
-        host, port = match.groups()
-        if "." not in host:
+        ipv4, ipv6, port = match.groups()
+        host = ipv4 or ipv6
+        if not (ipv6 or "." in host):
             return "服务器地址格式错误"
+        server_addr = name_or_ip
         if port:
             port = int(port)
             if not (0 < port < 65536):
                 return "端口号必须在1-65535之间"
             server_name = name_or_ip
         else:
-            port = 25565
             server_name = f"{name_or_ip}(:25565)"
-        server_addr = f"{host}:{port}"
+            server_addr = f"{name_or_ip}:25565"
 
     status = await _get_server_status(server_addr)
     if isinstance(status, bool):
@@ -122,13 +120,11 @@ async def server_info(matcher: Matcher, event: GroupMessageEvent, args: Message 
     """
     [name|ip|flag]
     获取服务器名称或ip指向的MC服务器信息
-    使用 -l 获取支持的服务器名称列表，使用 -a 获取服务器信息概览
+    使用 -a 标志获取当前在线服务器信息概览
     """
     with (config_dir / "mc-servers.json").open() as rf:
         data = json.load(rf)
-    group_config = data["config"].get(str(event.group_id))
-    if not group_config:
-        await matcher.finish("群聊未设置服务器列表", reply_message=True)
+    group_config = data["config"].get(str(event.group_id), [])
     await matcher.finish(await _server_info(
         {name: data["servers"][name] for name in group_config},
         args.extract_plain_text().strip()
