@@ -30,6 +30,7 @@ class Command:
             self.name,
             rule=self.is_enable,
             aliases=self.aliases,
+            force_whitespace=True,
             priority=0,
             block=True
         )
@@ -56,12 +57,13 @@ class Command:
         session_id = event.get_session_id()
         times[self.name].setdefault(session_id, 0)
         if times[self.name][session_id] >= self.max_usage_times:
-            await self.command_handler.finish("命令已达到最大使用次数", reply_message=True)
+            await self.command_handler.finish(f"命令已达到最大使用次数，每日使用次数为{self.max_usage_times}次", reply_message=True)
         times[self.name][session_id] += 1
         times_file.write_text(json.dumps(times, indent=4))
 
 help_cmd = on_command(
     "help",
+    force_whitespace=True,
     priority=0,
     block=True
 )

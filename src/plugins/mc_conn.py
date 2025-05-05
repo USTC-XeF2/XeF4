@@ -32,6 +32,7 @@ group_cmd_handler = on_command(
     "mcc",
     rule=is_in_group,
     aliases={("mcc", "send"), ("mcc", "player"), ("mcc", "time")},
+    force_whitespace=True,
     block=True
 )
 
@@ -98,6 +99,8 @@ async def _(
         else:
             msg = "服务器不存在"
         await group_cmd_handler.finish(msg, reply_message=True)
+    if not present_server:
+        await group_cmd_handler.finish("请先选择服务器", reply_message=True)
     try:
         mcbot: MCBot = get_bot(present_server)
     except:

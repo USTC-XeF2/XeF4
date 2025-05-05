@@ -3,7 +3,6 @@ import random
 import asyncio
 
 from nonebot import logger, on_message, on_type
-from nonebot.matcher import Matcher
 from nonebot.adapters.onebot.v11 import (
     Bot,
     GroupIncreaseNoticeEvent,
@@ -25,9 +24,13 @@ gcm = GroupConfigManager({
     "plus-one-delay": 1.5
 })
 
+async def plus_one_filter(bot: Bot, event: GroupMessageEvent):
+    recorder = await Recorder.get(event.group_id, bot)
+    return recorder.msg_repeat_count > 1
+
 poke_handler = on_type(PokeNotifyEvent)
 welcome_handler = on_type(GroupIncreaseNoticeEvent)
-plus_one_handler = on_message(block=False)
+plus_one_handler = on_message(rule=plus_one_filter)
 
 @poke_handler.handle()
 async def _(bot: Bot, event: PokeNotifyEvent, group_config: GC = GetGC(gcm)):
@@ -49,24 +52,14 @@ async def _(bot: Bot, group_config: GC = GetGC(gcm)):
 last_repeat: dict[int, tuple[str, int]] = {}
 
 @plus_one_handler.handle()
-async def _(bot: Bot, matcher: Matcher, event: GroupMessageEvent, group_config: GC = GetGC(gcm)):
+async def _(bot: Bot, event: GroupMessageEvent, group_config: GC = GetGC(gcm)):
     recorder = await Recorder.get(event.group_id, bot)
-    count = 0
-    last_msg = None
-    for e in recorder.msg_history[::-1]:
-        if str(e.user_id) == bot.self_id:
-            return
-        msg = e.original_message.to_rich_text()
-        if not count:
-            last_msg = msg
-            count += 1
-        elif msg == last_msg:
-            matcher.stop_propagation()
-            count += 1
-        else:
-            break
+    count = recorder.msg_repeat_count
+    if any(str(e.user_id) == bot.self_id for e in recorder.msg_history[-1:-count-1:-1]):
+        return
     rep_msg, rep_times = last_repeat.get(event.group_id, ("", 0))
-    if rep_msg == last_msg and time.time() - rep_times < group_config["plus-one-delay"]:
+    last_msg = recorder.last_msg
+    if rep_msg == last_msg and time.time() - rep_times < group_config["plus-one-delay"] * 2:
         return
     if random.random() < (count-1)/(count+1):
         last_repeat[event.group_id] = (last_msg, time.time())

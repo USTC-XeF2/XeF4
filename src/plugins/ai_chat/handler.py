@@ -2,7 +2,7 @@ import asyncio
 
 from nonebot import logger, on_command, on_message
 from nonebot.permission import SUPERUSER
-from nonebot.params import CommandArg
+from nonebot.params import Command, CommandArg
 from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, Message, MessageSegment
 from nonebot_plugin_group_config import GroupConfig, GroupConfigManager, GetGroupConfig
 
@@ -39,38 +39,52 @@ def _check_is_enable(event: GroupMessageEvent, group_config: GroupConfig = GetGr
 
 chat_cmd = on_command(
     "chat",
+    aliases={
+        ("chat", "clear"),
+        ("chat", "prompt"),
+        ("chat", "prompt", "clear")
+    },
+    force_whitespace=True,
     priority=0,
     block=True
 )
 reload_cmd = on_command(
     ("chat", "reload"),
+    force_whitespace=True,
     permission=SUPERUSER,
     priority=0,
     block=True
 )
-clear_cmd = on_command(
-    ("chat", "clear"),
-    priority=0,
-    block=True
-)
-clear_prompt_cmd = on_command(
-    ("chat", "prompt", "clear"),
-    priority=0,
-    block=True
-)
-prompt_cmd = on_command(
-    ("chat", "prompt"),
-    priority=1,
-    block=True
-)
 message_handler = on_message(rule=_check_is_enable, priority=99)
 
+last_clear_msg = dict[int, int]()
+
 @chat_cmd.handle()
-async def _():
-    text = """/chat.reload: 重新加载模型（仅限管理员使用）
-/chat.clear: 清空消息记录
+async def _(
+    event: GroupMessageEvent,
+    cmd: tuple[str, ...] = Command(),
+    args: Message = CommandArg(),
+    group_config: GroupConfig = GetGroupConfig(gcm)
+):
+    if cmd == ("chat",):
+        text = """/chat.clear: 清空消息记录
 /chat.prompt: 查看或设置提示词
-/chat.prompt.clear: 清空提示词"""
+/chat.prompt.clear: 清空提示词
+/chat.reload: 重新加载模型（仅限管理员使用）"""
+    else:
+        last_clear_msg[event.group_id] = event.message_id
+        if cmd == ("chat", "clear"):
+            text = "清空成功"
+        elif cmd == ("chat", "prompt"):
+            ipt = args.extract_plain_text().strip()
+            if not ipt:
+                text = f"当前群聊提示词：\n{group_config['prompt']}"
+            else:
+                group_config["prompt"] = ipt
+                text = "设置成功"
+        else:
+            group_config["prompt"] = ""
+            text = "清空成功"
     await chat_cmd.finish(text, reply_message=True)
 
 @reload_cmd.handle()
@@ -80,32 +94,6 @@ async def _():
     except Exception as e:
         await reload_cmd.finish(f"重新加载模型失败: {e.args[0]}", reply_message=True)
     await reload_cmd.finish("重新加载模型成功", reply_message=True)
-
-last_clear_msg = dict[int, int]()
-
-@clear_cmd.handle()
-async def _(event: GroupMessageEvent):
-    last_clear_msg[event.group_id] = event.message_id
-    await clear_cmd.finish("清空成功", reply_message=True)
-
-@clear_prompt_cmd.handle()
-async def _(event: GroupMessageEvent, group_config: GroupConfig = GetGroupConfig(gcm)):
-    group_config["prompt"] = ""
-    last_clear_msg[event.group_id] = event.message_id
-    await clear_prompt_cmd.finish("清空成功", reply_message=True)
-
-@prompt_cmd.handle()
-async def _(
-    event: GroupMessageEvent,
-    args: Message = CommandArg(),
-    group_config: GroupConfig = GetGroupConfig(gcm)
-):
-    text = args.extract_plain_text().strip()
-    if not text:
-        await prompt_cmd.finish(f"当前群聊提示词：\n{group_config['prompt']}", reply_message=True)
-    group_config["prompt"] = text
-    last_clear_msg[event.group_id] = event.message_id
-    await prompt_cmd.finish("设置成功", reply_message=True)
 
 uin_range: list[dict[str, str]] = None
 
@@ -187,7 +175,7 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
 
         if type == "text":
             logger.info(f"text: {content}")
-            response.append(content.removesuffix("。"))
+            response.append(content)
         elif type == "image":
             logger.info(f"image: {content}")
             url = await generate_image(content)
@@ -200,9 +188,10 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
             try:
                 formatted_msg: str = eval(f'f"""{content}"""', import_libs)
                 logger.info(f"fstring: {content} -> {formatted_msg}")
-                response.append(formatted_msg.removesuffix("。"))
+                response.append(formatted_msg)
             except Exception as e:
                 logger.error(f"failed to format fstring {content!r}: {e.args[0]}")
+    response = [msg for msg in response if msg]
 
     if not (response and recorder.get_msg(event.message_id)):
         await bot.group_poke(group_id=event.group_id, user_id=event.user_id)

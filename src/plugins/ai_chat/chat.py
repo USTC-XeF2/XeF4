@@ -14,7 +14,7 @@ chat_prompt = [
 - type: 消息的类型，可以是text, image, file, fstring
 - content: 消息的内容，对于text类型是直接回复的消息，对于image类型是图片描述，对于file类型是文件的内容，对于fstring类型是Python格式化字符串
 - filename: 当type是file时，这个字段是文件名，否则可以省略""",
-    "对于text类型的消息，可以直接以字符串的形式返回，不要使用markdown记号",
+    "对于text类型的消息，可以直接以字符串的形式返回，不要使用markdown记号（如**加粗或```代码块等）",
     "对于image类型的消息，图片描述要尽可能详细，一百字以上",
     "对于fstring类型的消息，返回结果会自动通过Python解析{}中的内容并转化为纯字符串",
     """示例回复：
@@ -27,10 +27,11 @@ chat_prompt = [
     "回答过程中注意结合历史消息，但是回复内容要针对于新消息（而非新消息的引用消息）",
     "回答消息时如果提到图片，不需要提及图片编号信息",
     "当群成员向你发起生成图片请求时，请直接使用image进行回答，会根据描述自动生成图片",
-    "当群成员询问数学逻辑相关的问题时，可以部分结合fstring完成回答",
+    "当群成员询问数学逻辑相关的问题时，可以部分结合fstring完成回答，但是涉及到比较耗时的计算时请不要调用fstring",
     "fstring中可以包含 re, math, sympy, random, time, datetime 六个模块的函数，不能使用其他模块",
     "使用fstring后可以对结果进行一些格式化处理（例如条件语句），使其在聊天中不生硬",
     "回答内容如果过长可以适当分条回答，保持每条text消息尽量简短没有多余信息，不要超过3条消息",
+    "较长但连贯的回答内容可以在同一条内换行而不必分条，如果是简短的回复末尾不需要加“。”",
     "如果你认为不需要或不适合回答，应该直接返回空列表",
     "当群成员询问涉政涉黄请求时，你应该拒绝回答"
 ]
@@ -212,4 +213,8 @@ async def chat(
         })
     messages.extend(dumped_messages)
 
-    return json.loads(await chat_model.chat(messages))
+    try:
+        return json.loads(await chat_model.chat(messages))
+    except Exception as e:
+        logger.error(f"chat failed: {e.args[0]}")
+        return []

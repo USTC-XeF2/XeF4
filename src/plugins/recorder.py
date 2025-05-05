@@ -14,6 +14,8 @@ class Recorder:
     def __init__(self, group_id: int):
         self.group_id = group_id
         self.msg_history = list[GroupMessageEvent]()
+        self.last_msg: str = None
+        self.msg_repeat_count = 0
 
     @classmethod
     async def get(cls, group_id: int, bot: Bot):
@@ -22,31 +24,31 @@ class Recorder:
             recorder = Recorder(group_id)
 
             cls._recorders[group_id] = recorder
-            response = await bot.call_api(
-                "get_group_msg_history",
+            response = await bot.get_group_msg_history(
                 group_id=group_id,
                 count=config.recorder_max_history_length
             )
-            history = list[GroupMessageEvent]()
             for msg in response["messages"]:
                 if not msg["message"]:
                     continue
                 msg["post_type"] = "message"
-                history.append(GroupMessageEvent(**msg))
-            logger.info(f"get {len(history)} messages from group {group_id}")
-            recorder.msg_history.extend(history)
+                recorder.append(GroupMessageEvent(**msg))
+            logger.info(f"get {len(recorder.msg_history)} messages from group {group_id}")
         return recorder
 
     def get_msg(self, message_id: int):
-        for e in self.msg_history:
-            if e.message_id == message_id:
-                return e
+        return next((e for e in self.msg_history if e.message_id == message_id), None)
 
     def append(self, event: GroupMessageEvent):
         if not self.get_msg(event.message_id):
             self.msg_history.append(event)
             if len(self.msg_history) > config.recorder_max_history_length:
                 self.msg_history.pop(0)
+            if (msg_text := event.original_message.to_rich_text()) == self.last_msg:
+                self.msg_repeat_count += 1
+            else:
+                self.msg_repeat_count = 1
+                self.last_msg = msg_text
 
     def delete(self, message_id: int):
         msg = self.get_msg(message_id)

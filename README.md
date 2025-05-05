@@ -13,3 +13,4 @@
 - 插件（使用 `nb plugin install` 安装）
   - nonebot-plugin-group-config
   - nonebot-plugin-follow-withdraw
+  - nonebot_plugin_analysis_bilibili

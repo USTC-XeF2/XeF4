@@ -1,6 +1,6 @@
 [project]
 name = "XeF4"
-version = "0.1.3"
+version = "0.1.4"
 description = "A comprehensive QQ group bot"
 readme = "README.md"
 requires-python = ">=3.9, <4.0"
@@ -10,6 +10,6 @@ adapters = [
     { name = "OneBot V11", module_name = "nonebot.adapters.onebot.v11" },
     { name = "Minecraft", module_name = "nonebot.adapters.minecraft" }
 ]
-plugins = ["nonebot_plugin_group_config", "nonebot_plugin_follow_withdraw"]
+plugins = ["nonebot_plugin_group_config", "nonebot_plugin_follow_withdraw", "nonebot_plugin_analysis_bilibili"]
 plugin_dirs = ["src/plugins"]
 builtin_plugins = []
