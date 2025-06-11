@@ -11,20 +11,10 @@ from ..recorder import Recorder
 from .utils import get_name, image_storage, generate_message, get_dumped_messages, get_image_data, get_file_segment
 from .chat import load_models, get_preprocess_info, get_image_description, search, generate_image, chat
 
-import_libs = {
-    "re": __import__("re"),
-    "math": __import__("math"),
-    "sympy": __import__("sympy"),
-    "random": __import__("random"),
-    "time": __import__("time"),
-    "datetime": __import__("datetime")
-}
-
 gcm = GroupConfigManager({
     "response-level": "at",
     "min-corresponding-length": 8,
     "max-history-length": 30,
-    "keywords": "",
     "prompt": "",
     "reply-interval": 1.5
 }, "chat")
@@ -124,24 +114,19 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
     logger.info(f"current history length: {len(history_messages)}")
 
     dumped_messages = get_dumped_messages(
+        await bot.get_group_info(group_id=event.group_id),
         await get_name(bot, event.group_id, bot.self_id),
         history_messages, new_messages
     )
-    keywords = group_config["keywords"].split(",") if group_config["keywords"] else []
-    preprocess_info = await get_preprocess_info(dumped_messages, keywords)
+    preprocess_info = await get_preprocess_info(dumped_messages)
     if not preprocess_info:
         logger.warning("get preprocess info failed")
         return
-    desire_threshold = 8 if event.is_tome() else 18
-    if keywords: desire_threshold += 1
-    
+    desire_threshold = 6 if event.is_tome() else 17
+
     if preprocess_info["search"]:
         desire_threshold -= 1
         logger.info(f"search: {preprocess_info['search']}")
-    for k in preprocess_info["keywords"]:
-        if k in keywords:
-            desire_threshold -= 3
-            logger.info(f"keywords: {','.join(preprocess_info['keywords'])}")
     logger.info(f"desire level: {preprocess_info['desire']}/{desire_threshold}")
     logger.info(f"reason: {preprocess_info['reason']}")
     if preprocess_info["desire"] < desire_threshold or not recorder.get_msg(event.message_id):
@@ -164,8 +149,11 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
     search_info = [res for res in await asyncio.gather(
         *map(search, preprocess_info["search"])
     ) if res]
+    think = preprocess_info["think"]
+    if think:
+        await bot.send(event, "🤔", reply_message=True)
     response = []
-    for msg in await chat(dumped_messages, group_config["prompt"], image_desc, search_info):
+    for msg in await chat(dumped_messages, group_config["prompt"], image_desc, search_info, think):
         if isinstance(msg, str):
             type = "text"
             content = msg
@@ -184,13 +172,6 @@ async def _(bot: Bot, event: GroupMessageEvent, group_config: GroupConfig = GetG
         elif type == "file":
             logger.info(f"file: {msg['filename']}")
             response.append(get_file_segment(msg["filename"], content.encode()))
-        elif type == "fstring":
-            try:
-                formatted_msg: str = eval(f'f"""{content}"""', import_libs)
-                logger.info(f"fstring: {content} -> {formatted_msg}")
-                response.append(formatted_msg)
-            except Exception as e:
-                logger.error(f"failed to format fstring {content!r}: {e.args[0]}")
     response = [msg for msg in response if msg]
 
     if not (response and recorder.get_msg(event.message_id)):

@@ -13,7 +13,7 @@ config_dir = get_config_dir("command")
 async def poke(matcher: Matcher, bot: Bot, event: GroupMessageEvent, args: Message = CommandArg()):
     """
     <qq|@> [times=1]
-    戳一戳指定qq号的用户，上限为5次，冷却时间60s
+    戳一戳指定qq号的用户，上限为5次
     """
     times = "1"
     if len(args) == 0:
@@ -68,8 +68,9 @@ async def _server_info(servers: dict[str, str], name_or_ip: str):
         info = "在线服务器状态列表\n--------------------"
         status_tasks = [_get_server_status(server, max_try=2)
                         for server in servers.values()]
-        status_results = await asyncio.gather(*status_tasks)
-        for name, status in zip(servers.keys(), status_results):
+        results = list(zip(servers.keys(), await asyncio.gather(*status_tasks)))
+        results.sort(key=lambda x: 0 if isinstance(x[1], bool) else x[1].players.online, reverse=True)
+        for name, status in results:
             if not isinstance(status, bool):
                 info += f"\n{name}: {round(status.latency, 1)}ms {status.players.online}/{status.players.max}人在线"
         return info

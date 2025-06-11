@@ -51,10 +51,12 @@ class Recorder:
                 self.last_msg = msg_text
 
     def delete(self, message_id: int):
-        msg = self.get_msg(message_id)
-        if msg:
-            logger.info(f"delete message {message_id} from group {self.group_id}")
-            self.msg_history.remove(msg)
+        for idx, msg in enumerate(self.msg_history):
+            if msg.message_id == message_id:
+                logger.info(f"delete message {message_id} from group {self.group_id}")
+                self.msg_history.pop(idx)
+                if len(self.msg_history) - idx <= self.msg_repeat_count:
+                    self.msg_repeat_count -= 1
 
     def get_reply_msg(self, event: GroupMessageEvent):
         for msg_seg in event.original_message:

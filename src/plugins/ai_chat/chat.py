@@ -1,6 +1,5 @@
 import json
 import time
-import random
 from openai import AsyncOpenAI, APIStatusError
 
 from nonebot import logger
@@ -11,25 +10,21 @@ chat_prompt = [
     "新消息引用链是一个列表，其中第一项是你需要回复的消息，后面的消息依次是新消息所引用的消息",
     "你的回复需要是一个json格式列表，列表的每一项是一条消息，这些消息将会依次发送到群聊中",
     """列表中的每一条消息都是一个字典，需要包含以下字段：
-- type: 消息的类型，可以是text, image, file, fstring
-- content: 消息的内容，对于text类型是直接回复的消息，对于image类型是图片描述，对于file类型是文件的内容，对于fstring类型是Python格式化字符串
+- type: 消息的类型，可以是text, image, file
+- content: 消息的内容，对于text类型是直接回复的消息，对于image类型是图片描述，对于file类型是文件的内容
 - filename: 当type是file时，这个字段是文件名，否则可以省略""",
     "对于text类型的消息，可以直接以字符串的形式返回，不要使用markdown记号（如**加粗或```代码块等）",
     "对于image类型的消息，图片描述要尽可能详细，一百字以上",
-    "对于fstring类型的消息，返回结果会自动通过Python解析{}中的内容并转化为纯字符串",
     """示例回复：
 ["你好，我是机器人", "请问有什么可以帮助你的吗？"]
-[{"type":"fstring","content":"现在的时间是{time.strftime('%H点%M')}"}]
-[{"type":"fstring","content":"114514*1919810的结果是{114514*1919810}"}, {"type":"fstring","content":"这个结果比10^11{'大' if 114514*1919810 > 10**11 else '小'}"}]
+[{"type":"image","content":"..."}, "你要的关于小猫睡觉的图片画好了"]
 ["这是你需要的txt文件", {"type":"file","content":"...","filename":"example.txt"}]""",
     "删去问候或鼓励等机器人的常见回答方式，对话不用提到对方名称，回答后不需要再次提问",
     "尽量把自己拟人化，不要过分增加设定，可以根据上下文使用其他群成员的发言方式增强融合感",
+    "请确保你回答的消息都是真实可信的，不要编造虚假信息",
     "回答过程中注意结合历史消息，但是回复内容要针对于新消息（而非新消息的引用消息）",
     "回答消息时如果提到图片，不需要提及图片编号信息",
     "当群成员向你发起生成图片请求时，请直接使用image进行回答，会根据描述自动生成图片",
-    "当群成员询问数学逻辑相关的问题时，可以部分结合fstring完成回答，但是涉及到比较耗时的计算时请不要调用fstring",
-    "fstring中可以包含 re, math, sympy, random, time, datetime 六个模块的函数，不能使用其他模块",
-    "使用fstring后可以对结果进行一些格式化处理（例如条件语句），使其在聊天中不生硬",
     "回答内容如果过长可以适当分条回答，保持每条text消息尽量简短没有多余信息，不要超过3条消息",
     "较长但连贯的回答内容可以在同一条内换行而不必分条，如果是简短的回复末尾不需要加“。”",
     "如果你认为不需要或不适合回答，应该直接返回空列表",
@@ -37,26 +32,41 @@ chat_prompt = [
 ]
 
 class ChatModel:
+    _providers = dict[str, dict[str, str]]()
     _clients = dict[str, AsyncOpenAI]()
-    def __init__(self, api_keys: list[str], models: list[str], base_url: str = None):
-        self.api_keys = api_keys
-        self.base_url = base_url
-        self.models = models
+    def __init__(self, choices: list[tuple[str, str]]):
+        self.choices = choices
 
-    def get_api_key(self):
-        api_key = random.choice(self.api_keys)
-        if api_key not in self._clients:
-            masked_api_key = api_key[:8] + "*" * 10 + api_key[-4:]
-            logger.info(f"create client for api key {masked_api_key}")
-            type(self)._clients[api_key] = AsyncOpenAI(api_key=api_key, base_url=self.base_url)
-        return api_key
+    @classmethod
+    def set_providers(cls, providers: dict[str, dict[str]]):
+        cls._providers = providers
+        cls._clients = {}
+
+    @classmethod
+    def get_client(cls, provider_name: str):
+        if provider_name not in cls._clients:
+            provider = cls._providers.get(provider_name)
+            if not provider:
+                logger.error(f"provider {provider_name} not found")
+                return
+            logger.info(f"create client for {provider_name}")
+            cls._clients[provider_name] = AsyncOpenAI(
+                api_key=provider["api_key"],
+                base_url=provider.get("base_url", None)
+            )
+        return cls._clients[provider_name]
+
+    def iter_client(self):
+        for provider_name, model in self.choices:
+            client = self.get_client(provider_name)
+            if client:
+                logger.info(f"use provider {provider_name!r} for model {model!r}")
+                yield (client, model)
 
     async def chat(self, messages: list[dict[str]]):
-        api_key = self.get_api_key()
-        for model in self.models:
+        for client, model in self.iter_client():
             try:
-                logger.info(f"use model {model}")
-                response = await self._clients[api_key].chat.completions.create(
+                response = await client.chat.completions.create(
                     model=model,
                     messages=messages
                 )
@@ -64,26 +74,14 @@ class ChatModel:
                     logger.info(f"reasoning content: {response.choices[0].message.reasoning_content}")
                 ans = response.choices[0].message.content
                 if ans:
-                    return ans
-            except APIStatusError:
-                continue
-
-    async def generate_image(self, prompt: str):
-        api_key = self.get_api_key()
-        for model in self.models:
-            try:
-                logger.info(f"use model {model}")
-                response = await self._clients[api_key].images.generate(
-                    model=model,
-                    prompt=prompt
-                )
-                return response.data[0].url
+                    return ans.removeprefix("```json").removesuffix("```").strip()
             except APIStatusError:
                 continue
 
 chat_model: ChatModel = None
 preprocess_model: ChatModel = None
 image_model: ChatModel = None
+think_model: ChatModel = None
 search_model: ChatModel = None
 gen_image_model: ChatModel = None
 
@@ -92,30 +90,41 @@ def load_models():
     if not config_file.exists():
         logger.error("models.json not found, creating default file")
         default = {
-            "chat": {
-                "api_keys": [],
-                "models": []
+            "providers": {
+                "name": {
+                    "base_url": "https://api.openai.com/v1",
+                    "api_key": "your_api_key"
+                }
+            },
+            "preference": {
+                "chat": [
+                    ["provider-name", "model"]
+                ]
             }
         }
         with config_file.open("w") as wf:
             json.dump(default, wf, indent=4)
         return
     with config_file.open() as rf:
-        config = json.load(rf)
-    global chat_model, preprocess_model, image_model, search_model, gen_image_model
-    chat_model = ChatModel(**config["chat"])
-    if "preprocess" in config:
-        preprocess_model = ChatModel(**config["preprocess"])
+        config: dict[str, dict[str]] = json.load(rf)
+    ChatModel.set_providers(config["providers"])
+    preference = config["preference"]
+    global chat_model, preprocess_model, image_model, think_model, search_model, gen_image_model
+    chat_model = ChatModel(preference["chat"])
+    if "preprocess" in preference:
+        preprocess_model = ChatModel(preference["preprocess"])
     else:
         preprocess_model = chat_model
-    if "image" in config:
-        image_model = ChatModel(**config["image"])
-    if "search" in config:
-        search_model = ChatModel(**config["search"])
-    if "gen-image" in config:
-        gen_image_model = ChatModel(**config["gen-image"])
+    if "image" in preference:
+        image_model = ChatModel(preference["image"])
+    if "think" in preference:
+        think_model = ChatModel(preference["think"])
+    if "search" in preference:
+        search_model = ChatModel(preference["search"])
+    if "gen-image" in preference:
+        gen_image_model = ChatModel(preference["gen-image"])
 
-async def get_preprocess_info(dumped_messages: list[dict[str, str]], keywords: list[str]) -> dict[str | list[str]]:
+async def get_preprocess_info(dumped_messages: list[dict[str, str]]) -> dict[str | list[str]]:
     if not preprocess_model:
         return
 
@@ -124,10 +133,6 @@ async def get_preprocess_info(dumped_messages: list[dict[str, str]], keywords: l
             "role": "system",
             "content": rf.read()
         }]
-    messages.append({
-        "role": "system",
-        "content": ("关键词：" + "、".join(keywords)) if keywords else "目前无群聊关键词"
-    })
     messages.extend(dumped_messages)
 
     retry = 3
@@ -139,7 +144,7 @@ async def get_preprocess_info(dumped_messages: list[dict[str, str]], keywords: l
             if retry:
                 logger.warning("get preprocess info failed, retrying")
 
-async def get_image_description(image_data: str, prompt: str) -> str:
+async def get_image_description(image_data: str, prompt: str):
     if not image_model:
         return
 
@@ -159,7 +164,7 @@ async def get_image_description(image_data: str, prompt: str) -> str:
 
     return await image_model.chat(messages)
 
-async def search(query: str) -> str:
+async def search(query: str):
     if not search_model:
         return
 
@@ -173,25 +178,31 @@ async def search(query: str) -> str:
 
     return await search_model.chat(messages)
 
-async def generate_image(prompt: str) -> str:
+async def generate_image(prompt: str):
     if not gen_image_model:
         return
 
-    return await gen_image_model.generate_image(prompt)
+    for client, model in gen_image_model.iter_client():
+        try:
+            response = await client.images.generate(
+                model=model,
+                prompt=prompt
+            )
+            return response.data[0].url
+        except APIStatusError:
+            continue
 
 async def chat(
         dumped_messages: list[dict[str, str]],
         prompt: str,
         image_desc: list[tuple[int, str]],
-        search_info: list[str]
+        search_info: list[str],
+        think: bool
     ) -> list[str | dict[str, str]]:
     if not chat_model:
         raise ValueError("chat model not loaded")
 
-    messages = [{
-        "role": "system",
-        "content": i
-    } for i in chat_prompt]
+    messages = []
     if image_desc:
         messages.extend([{
             "role": "system",
@@ -206,10 +217,25 @@ async def chat(
         "role": "system",
         "content": f"当前时间：{time.strftime('%Y-%m-%d %H:%M:%S')}"
     })
+
+    think_content = None
+    if think and think_model:
+        logger.info("thinking...")
+        think_content = await think_model.chat(messages + dumped_messages)
+
+    messages = [{
+        "role": "system",
+        "content": i
+    } for i in chat_prompt] + messages
     if prompt:
         messages.append({
             "role": "user",
             "content": prompt
+        })
+    if think_content:
+        messages.append({
+            "role": "user",
+            "content": f"深度思考结果：\n{think_content}"
         })
     messages.extend(dumped_messages)
 

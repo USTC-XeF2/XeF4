@@ -48,14 +48,16 @@ async def generate_message(bot: Bot, event: GroupMessageEvent, try_read_file: bo
                     pass
             name = msg_seg.data["file"]
             content += f"[文件-{name}]"
-    return f"[{format_time} {sender_name}]\n{content}"
+    role_prefix = "{管理员}" if event.sender.role == "admin" else ""
+    return f"{role_prefix}[{format_time} {sender_name}]\n{content}"
 
-def get_dumped_messages(name: str, history_messages: list[str], new_messages: list[str]):
+def get_dumped_messages(group_info: dict[str], name: str, history_messages: list[str], new_messages: list[str]):
     return [{
         "role": "user",
         "content": i
     } for i in (
         f"你的名字是{name}",
+        f"群聊名称：{group_info['group_name']} ({group_info['member_count']}人)",
         f"历史消息：{json.dumps(history_messages, ensure_ascii=False)}",
         f"新消息及引用消息链：{json.dumps(new_messages, ensure_ascii=False)}"
     )]
