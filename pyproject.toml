@@ -1,0 +1,20 @@
+[project]
+name = "XeF4"
+version = "1.0.0"
+description = "A multifunctional QQ group robot"
+readme = "README.md"
+requires-python = ">=3.9, <4.0"
+dependencies = [
+    "nonebot-adapter-minecraft>=1.4.2",
+    "nonebot-adapter-onebot>=2.4.6",
+    "nonebot2[fastapi,websockets]>=2.4.3",
+]
+
+[tool.nonebot]
+adapters = [
+    { name = "OneBot V11", module_name = "nonebot.adapters.onebot.v11" },
+    { name = "Minecraft", module_name = "nonebot.adapters.minecraft" }
+]
+plugins = []
+plugin_dirs = []
+builtin_plugins = []

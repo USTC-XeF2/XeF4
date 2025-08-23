@@ -1,0 +1,9 @@
+{
+    "files.eol": "\n",
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "python.analysis.typeCheckingMode": "standard",
+    "editor.codeActionsOnSave": {
+        "source.organizeImports.ruff": "explicit"
+    }
+}
