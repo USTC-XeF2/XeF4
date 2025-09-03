@@ -268,7 +268,7 @@ async def _(event: GroupMessageEvent, server: Match[str]):
         info += SPLITER
     info += f"版本：{result.status.version.name}\n"
     if not is_known:
-        info += f"延迟：{result.status.latency}ms\n"
+        info += f"延迟：{result.status.latency:.1f}ms\n"
     info += f"在线人数：{players.online}/{result.status.players.max}"
     if player_list:
         show_ellipsis = len(player_list) > 5 or len(player_list) < players.online

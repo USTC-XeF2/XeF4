@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 
 from nonebot import get_plugin_config, logger, require
 from nonebot.adapters.onebot.v11 import (
@@ -28,7 +29,8 @@ class Config(BaseModel):
 config = get_plugin_config(Config)
 
 
-class RecordMessage(BaseModel):
+@dataclass
+class RecordMessage:
     id: int
     time: int
     sender: Sender

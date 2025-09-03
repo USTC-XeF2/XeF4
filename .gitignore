@@ -170,5 +170,7 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 
+# NoneBot Localstore
+/cache/
 /config/
 /data/

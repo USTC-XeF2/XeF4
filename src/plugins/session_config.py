@@ -19,11 +19,11 @@ def get_session_config_dir(bot_id: str | int):
 
 
 def load_config(config_path: Path, config_type: type[T]):
-    if config_path.exists():
-        with config_path.open(encoding="utf-8") as rf:
-            data = yaml.safe_load(rf)
-        if data:
-            return config_type.model_validate(data)
+    config_path.touch()
+    with config_path.open(encoding="utf-8") as rf:
+        data = yaml.safe_load(rf)
+    if data:
+        return config_type.model_validate(data)
     return config_type()
 
 
