@@ -8,6 +8,7 @@ class Config(BaseModel):
     chat_api_key: SecretStr
     chat_base_url: str
     chat_model: str
+    thinking_model: str | None = None
     image_api_key: str
 
 

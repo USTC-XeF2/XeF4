@@ -2,7 +2,15 @@ import asyncio
 
 from nonebot import logger, on_message
 from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, MessageEvent
-from nonebot_plugin_alconna import Alconna, Args, Match, Option, Subcommand, on_alconna
+from nonebot_plugin_alconna import (
+    Alconna,
+    Args,
+    CommandMeta,
+    Match,
+    Option,
+    Subcommand,
+    on_alconna,
+)
 
 from ..recorder import Recorder
 from ..session_config import get_config_path, get_session_config, save_config
@@ -36,8 +44,14 @@ async def should_reply(
 chat_command = on_alconna(
     Alconna(
         "chat",
-        Subcommand("prompt", Option("set", Args["prompt", str]), Option("clear")),
-        Option("clear"),
+        Subcommand(
+            "prompt",
+            Option("set", Args["prompt", str], help_text="设置提示词"),
+            Option("clear", help_text="清空提示词"),
+            help_text="查看提示词",
+        ),
+        Option("clear", help_text="清空消息记录"),
+        meta=CommandMeta(description="机器人聊天控制指令", compact=True),
     ),
     use_cmd_start=True,
     priority=0,
@@ -88,7 +102,9 @@ async def _(bot: Bot, event: MessageEvent):
 
 
 @group_message.handle()
-async def _(bot: Bot, event: GroupMessageEvent):
+async def _(
+    bot: Bot, event: GroupMessageEvent, session_config: SConfig = SessionConfig
+):
     recorder = await Recorder.get(bot, event)
 
     bot_name = await get_name(bot, event.group_id, int(bot.self_id))
@@ -98,7 +114,9 @@ async def _(bot: Bot, event: GroupMessageEvent):
         for msg in recorder.get_messages(50)
     ]
 
-    chat_coroutine = group_chat(bot_name, group_info["group_name"], history)
+    chat_coroutine = group_chat(
+        bot_name, group_info["group_name"], session_config.chat_prompt, history
+    )
     chat_task = asyncio.create_task(chat_coroutine) if event.is_tome() else None
 
     desire_threshold = 6 if event.is_tome() else 17
@@ -142,7 +160,7 @@ async def _(bot: Bot, event: GroupMessageEvent):
     if len(messages) == 0:
         await bot.group_poke(group_id=event.group_id, user_id=event.user_id)
         return
-    await bot.send(event, messages[0], reply_message=True)
+    await group_message.send(messages[0], reply_message=True)
     for msg in messages[1:]:
         await asyncio.sleep(1.5)
         await group_message.send(msg)
