@@ -1,7 +1,7 @@
 [project]
 name = "XeF4"
 version = "1.0.0"
-description = "A multifunctional QQ group robot"
+description = "A multifunctional QQ robot"
 readme = "README.md"
 requires-python = ">=3.9, <4.0"
 dependencies = [
