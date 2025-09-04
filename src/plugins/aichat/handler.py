@@ -1,7 +1,12 @@
 import asyncio
 
 from nonebot import logger, on_message
-from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, MessageEvent
+from nonebot.adapters.onebot.v11 import (
+    Bot,
+    GroupMessageEvent,
+    MessageEvent,
+    MessageSegment,
+)
 from nonebot_plugin_alconna import (
     Alconna,
     Args,
@@ -14,10 +19,10 @@ from nonebot_plugin_alconna import (
 
 from ..recorder import Recorder
 from ..session_config import get_config_path, get_session_config, save_config
-from .chat import get_predict, group_chat
+from .chat import get_image, get_predict, group_chat
 from .config import SConfig
 from .tools import ToolReturn
-from .utils import convert_messages, format_message, get_image, get_name
+from .utils import convert_messages, format_message, get_name
 
 SessionConfig = get_session_config(SConfig)
 uin_range = None
@@ -142,9 +147,13 @@ async def _(
         chat_result = await (chat_task if chat_task else chat_coroutine)
         if isinstance(chat_result, ToolReturn):
             if chat_result.type == "image":
-                image_segment = await get_image(prompt=chat_result.result)
-                if image_segment:
-                    messages.append(image_segment)
+                try:
+                    image = await get_image(prompt=chat_result.result)
+                except Exception as e:
+                    logger.error(f"generate image failed: {e}")
+                    image = None
+                if image:
+                    messages.append(MessageSegment.image(image))
                 else:
                     messages.append("图片生成失败")
         else:

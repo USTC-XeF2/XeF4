@@ -1,14 +1,9 @@
 import re
-import time
+from datetime import datetime
 
-import requests
-from nonebot import get_plugin_config, logger
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 
 from ..recorder import RecordMessage
-from .config import Config
-
-plugin_config = get_plugin_config(Config)
 
 
 async def get_name(bot: Bot, group_id: int, user_id: int) -> str:
@@ -19,9 +14,7 @@ async def get_name(bot: Bot, group_id: int, user_id: int) -> str:
 async def format_message(
     bot: Bot, group_id: int, message: RecordMessage, read_file: bool
 ):
-    format_time = time.strftime(
-        "%H:%M:%S", time.gmtime(message.time + plugin_config.timezone * 3600)
-    )
+    format_time = datetime.fromtimestamp(message.time).strftime("%H:%M:%S")
     role_prefix = (
         "<admin>"
         if message.sender.role == "admin"
@@ -64,26 +57,6 @@ async def format_message(
             name = msg_seg.data["file"]
             content += f"[文件:{name}]"
     return f"[{format_time} {role_prefix}{sender_name}]\n{refer}{content}"
-
-
-async def get_image(prompt: str):
-    try:
-        response = requests.post(
-            "https://api.stability.ai/v2beta/stable-image/generate/core",
-            headers={
-                "accept": "image/*",
-                "authorization": f"Bearer {plugin_config.image_api_key}",
-            },
-            files={"none": ""},
-            data={
-                "prompt": prompt,
-            },
-        )
-
-        if response.status_code == 200:
-            return MessageSegment.image(response.content)
-    except Exception as e:
-        logger.error(f"generate image failed: {e}")
 
 
 def convert_messages(messages: list[str], name_map: dict[str, int]):
