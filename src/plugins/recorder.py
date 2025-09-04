@@ -80,27 +80,23 @@ class Recorder:
 
     @property
     def cutoff(self):
-        data_path = get_plugin_data_file(f"cutoff-{self.bot_id}.json")
-        if not data_path.exists():
+        data_file = get_plugin_data_file(f"cutoff-{self.bot_id}.json")
+        if not data_file.exists():
             return None
-        with data_path.open(encoding="utf-8") as rf:
-            data: dict[str, int] = json.load(rf)
-        return data.get(self.session_id)
+        return json.loads(data_file.read_text(encoding="utf-8")).get(self.session_id)
 
     @cutoff.setter
     def cutoff(self, value: int | None):
-        data_path = get_plugin_data_file(f"cutoff-{self.bot_id}.json")
-        if not data_path.exists():
+        data_file = get_plugin_data_file(f"cutoff-{self.bot_id}.json")
+        if not data_file.exists():
             data = {}
         else:
-            with data_path.open(encoding="utf-8") as rf:
-                data = json.load(rf)
+            data = json.loads(data_file.read_text(encoding="utf-8"))
         if value is not None:
             data[self.session_id] = value
         elif self.session_id in data:
             del data[self.session_id]
-        with data_path.open(encoding="utf-8", mode="w") as wf:
-            json.dump(data, wf)
+        data_file.write_text(json.dumps(data), encoding="utf-8")
 
     def get_messages(self, count: int):
         messages: list[RecordMessage] = []

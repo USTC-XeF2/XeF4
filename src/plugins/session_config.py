@@ -28,12 +28,9 @@ def load_config(config_path: Path, config_type: type[T]):
 
 
 def save_config(config_path: Path, config: BaseModel):
-    data = {}
-    if config_path.exists():
-        with config_path.open(encoding="utf-8") as rf:
-            data = yaml.safe_load(rf)
-    else:
-        data = {}
+    config_path.touch()
+    with config_path.open(encoding="utf-8") as rf:
+        data = yaml.safe_load(rf) or {}
     with config_path.open("w", encoding="utf-8") as wf:
         yaml.safe_dump(data | config.model_dump(), wf, allow_unicode=True)
 

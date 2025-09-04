@@ -1,5 +1,6 @@
 import asyncio
 import json
+import shutil
 import time
 
 from jmcomic import JmModuleConfig
@@ -104,6 +105,10 @@ async def jmcomic(event: MessageEvent, args: Message = CommandArg()):
             pdf_path = get_pdf_path()
         if not pdf_path:
             await command.finish("下载漫画失败", reply_message=True)
+
+        for item in cache_dir.iterdir():
+            if item.is_dir():
+                shutil.rmtree(item)
 
         await command.send(f"正在发送 {pdf_path.name}，请稍等...", reply_message=True)
         try:
