@@ -124,7 +124,7 @@ async def _(
     )
     chat_task = asyncio.create_task(chat_coroutine) if event.is_tome() else None
 
-    desire_threshold = 6 if event.is_tome() else 17
+    desire_threshold = 3 if event.is_tome() else 9
     try:
         predict = await get_predict(bot_name, group_info["group_name"], history)
         logger.info(f"desire level: {predict.desire}/{desire_threshold}")

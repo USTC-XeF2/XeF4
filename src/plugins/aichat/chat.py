@@ -27,7 +27,7 @@ llm = ChatOpenAI(
     api_key=plugin_config.chat_api_key,
     base_url=plugin_config.chat_base_url,
     model=plugin_config.chat_model,
-    temperature=0.3,
+    temperature=0.5,
 )
 structured_llm = llm.with_structured_output(PredictResponse, method="json_mode")
 thinking_llm: ChatOpenAI | None = None
@@ -77,7 +77,13 @@ async def get_image(prompt: str):
         return response.content
 
 
+@tool
 def thinking(content: str) -> str:
+    """深度思考给定的问题，返回思考结果，可用于数学问题等
+
+    Args:
+        content: 需要思考的问题
+    """
     if not plugin_config.thinking_model:
         return "思考功能未启用"
     global thinking_llm
@@ -86,7 +92,7 @@ def thinking(content: str) -> str:
             api_key=plugin_config.chat_api_key,
             base_url=plugin_config.chat_base_url,
             model=plugin_config.thinking_model,
-            temperature=0.3,
+            temperature=0,
         )
     return thinking_llm.invoke(content).text()
 
@@ -109,12 +115,7 @@ async def group_chat(
     if plugin_config.image_api_key:
         tools.append(generate_image)
     if plugin_config.thinking_model:
-        tools.append(
-            tool(
-                thinking,
-                description="深度思考给定的问题，返回思考结果，可用于数学、逻辑问题等",
-            )
-        )
+        tools.append(thinking)
 
     agent_executor = AgentExecutor(
         agent=create_tool_calling_agent(llm, tools, prompt),
