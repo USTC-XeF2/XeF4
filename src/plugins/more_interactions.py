@@ -10,8 +10,10 @@ from .recorder import Recorder
 
 
 class Config(BaseModel):
+    poke_enable: bool = True
     poke_delay: float = 0.5
     poke_cooldown: float = 5.0
+    plus_one_enable: bool = True
     plus_one_delay: float = 1.0
     plus_one_cooldown: float = 3.0
 
@@ -20,6 +22,8 @@ config = get_plugin_config(Config)
 
 
 async def plus_one_filter(bot: Bot, event: GroupMessageEvent):
+    if not config.plus_one_enable:
+        return False
     recorder = await Recorder.get(bot, event)
     return (
         len(recorder.msg_repeat_users) > 1
@@ -27,7 +31,7 @@ async def plus_one_filter(bot: Bot, event: GroupMessageEvent):
     )
 
 
-poke_handler = on_type(PokeNotifyEvent)
+poke_handler = on_type(PokeNotifyEvent, rule=lambda: config.poke_enable)
 plus_one_handler = on_message(rule=plus_one_filter)
 
 

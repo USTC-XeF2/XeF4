@@ -54,15 +54,10 @@ command = on_alconna(
     Alconna(
         "mc-status",
         Subcommand(
-            "info",
-            Args["server", str],
-            help_text="获取指定服务器状态信息",
-        ),
-        Subcommand(
             "history|his",
             Args["server", str],
             Args["days", int, 7],
-            help_text="获取指定服务器历史信息，默认为近7天",
+            help_text="获取指定服务器历史在线人数，默认为近7天",
         ),
         Subcommand(
             "list|ls",
@@ -108,16 +103,13 @@ def get_server_history(group_id: int, server_name: str) -> list[dict]:
     history_file = get_plugin_data_file(f"history-{group_id}.json")
     if not history_file.exists():
         return []
-    with history_file.open(encoding="utf-8") as rf:
-        all_servers: dict[str, list[dict]] = json.load(rf)
-    return all_servers.get(server_name, [])
+    return json.loads(history_file.read_text(encoding="utf-8")).get(server_name, [])
 
 
 def add_server_history(group_id: int, server_name: str, online_player: int):
     history_file = get_plugin_data_file(f"history-{group_id}.json")
     if history_file.exists():
-        with history_file.open(encoding="utf-8") as rf:
-            all_servers: dict[str, list[dict]] = json.load(rf)
+        all_servers = json.loads(history_file.read_text(encoding="utf-8"))
     else:
         all_servers = {}
     history = all_servers.get(server_name, [])
@@ -130,8 +122,7 @@ def add_server_history(group_id: int, server_name: str, online_player: int):
     all_servers[server_name] = [
         entry for entry in history if now - entry["time"] < 86400 * 30
     ]
-    with history_file.open("w", encoding="utf-8") as wf:
-        json.dump(all_servers, wf)
+    history_file.write_text(json.dumps(all_servers), encoding="utf-8")
 
 
 async def get_server_status(server: Server, max_try: int):
@@ -226,11 +217,10 @@ async def _(event: GroupMessageEvent, server: Match[str], days: Match[int]):
     buf = io.BytesIO()
     fig.savefig(buf, format="png")
     plt.close(fig)
-    await command.finish(MessageSegment.image(buf.getvalue()), reply_message=True)
+    await command.finish(MessageSegment.image(buf), reply_message=True)
 
 
 @command.handle()
-@command.assign("info")
 async def _(event: GroupMessageEvent, server: Match[str]):
     name_or_ip = server.result
     if not name_or_ip:
