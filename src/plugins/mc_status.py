@@ -9,12 +9,15 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import yaml
 from matplotlib.dates import DateFormatter, date2num
+from matplotlib.font_manager import fontManager
 from matplotlib.ticker import MaxNLocator
 from mcstatus import JavaServer
 from mcstatus.responses import JavaStatusResponse
-from nonebot import logger, require
+from nonebot import get_plugin_config, logger, require
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment
 from pydantic import BaseModel
+
+from .session_config import check_enable
 
 require("nonebot_plugin_alconna")
 require("nonebot_plugin_apscheduler")
@@ -26,13 +29,27 @@ from nonebot_plugin_alconna import (
     CommandMeta,
     Match,
     Option,
+    Query,
     Subcommand,
     on_alconna,
 )
 from nonebot_plugin_apscheduler import scheduler
 from nonebot_plugin_localstore import get_plugin_data_dir, get_plugin_data_file
 
-plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei"]
+
+class Config(BaseModel):
+    mc_status_min_record_interval: int = 600
+    mc_status_max_history_days: int = 30
+
+
+class SConfig(BaseModel):
+    mc_status_enabled: bool = False
+
+
+config = get_plugin_config(Config)
+
+fontManager.addfont("./src/resources/unifont.otf")
+plt.rcParams["font.family"] = ["Unifont"]
 plt.rcParams["axes.unicode_minus"] = False
 
 
@@ -61,12 +78,13 @@ command = on_alconna(
         ),
         Subcommand(
             "list|ls",
-            Option("--all|-a", default=False, help_text="展示离线服务器(默认不展示)"),
+            Option("--all|-a", help_text="展示离线服务器(默认不展示)"),
             help_text="获取已配置的所有服务器状态概览",
         ),
         Args["server", str, None],
         meta=CommandMeta(description="获取 Minecraft 服务器信息", compact=True),
     ),
+    rule=check_enable(SConfig, "mc_status_enabled"),
     aliases={"mcs", "s"},
     use_cmd_start=True,
     priority=0,
@@ -88,7 +106,10 @@ def get_servers(group_id: int) -> list[Server]:
             wf.write(server_example)
         return []
     with data_file.open(encoding="utf-8") as rf:
-        return [Server.model_validate(data) for data in yaml.safe_load(rf)]
+        data = yaml.safe_load(rf)
+    if data:
+        return [Server.model_validate(s) for s in data]
+    return []
 
 
 def get_server(group_id: int, name_or_alias: str):
@@ -114,13 +135,18 @@ def add_server_history(group_id: int, server_name: str, online_player: int):
         all_servers = {}
     history = all_servers.get(server_name, [])
     now = int(time.time())
-    if history:
-        if now - history[-1]["time"] < 600 and history[-1]["online"] == online_player:
-            return
+    if (
+        history
+        and now - history[-1]["time"] < config.mc_status_min_record_interval
+        and history[-1]["online"] == online_player
+    ):
+        return
     logger.info(f"add history for {server_name!r}, with {online_player} players online")
     history.append({"time": now, "online": online_player})
     all_servers[server_name] = [
-        entry for entry in history if now - entry["time"] < 86400 * 30
+        entry
+        for entry in history
+        if now - entry["time"] < config.mc_status_max_history_days * 86400
     ]
     history_file.write_text(json.dumps(all_servers), encoding="utf-8")
 
@@ -156,11 +182,13 @@ async def get_server_status(server: Server, max_try: int):
 
 
 @command.assign("list")
-async def _(event: GroupMessageEvent, all: Match[bool]):
+async def _(
+    event: GroupMessageEvent, all=Query("subcommands.list.options.all", default=None)
+):
     servers = get_servers(event.group_id)
     status_tasks = [get_server_status(server, max_try=2) for server in servers]
     results = await asyncio.gather(*status_tasks)
-    if not all.result:
+    if all.result is None:
         results = [r for r in results if r.online_urls]
     results.sort(
         key=lambda x: x.status.players.online if x.status else -1, reverse=True
@@ -183,8 +211,11 @@ async def _(event: GroupMessageEvent, server: Match[str], days: Match[int]):
     valid_server = get_server(event.group_id, server.result)
     if not valid_server:
         await command.finish("无此服务器", reply_message=True)
-    if not 0 < days.result <= 30:
-        await command.finish("请提供有效的天数（1-30）", reply_message=True)
+    if not 0 < days.result <= config.mc_status_max_history_days:
+        await command.finish(
+            f"请提供有效的天数（1-{config.mc_status_max_history_days}）",
+            reply_message=True,
+        )
 
     history = get_server_history(event.group_id, valid_server.name)
     start_time = time.time() - days.result * 86400
@@ -215,7 +246,7 @@ async def _(event: GroupMessageEvent, server: Match[str], days: Match[int]):
     fig.tight_layout()
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png")
+    fig.savefig(buf, dpi=200, format="png")
     plt.close(fig)
     await command.finish(MessageSegment.image(buf), reply_message=True)
 

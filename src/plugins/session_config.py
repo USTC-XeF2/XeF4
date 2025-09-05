@@ -5,6 +5,7 @@ import yaml
 from nonebot import require
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageEvent
 from nonebot.params import Depends
+from nonebot.rule import Rule
 from pydantic import BaseModel
 
 require("nonebot_plugin_localstore")
@@ -50,3 +51,10 @@ def get_session_config(config_type: type[T]):
         return load_config(get_config_path(event), config_type)
 
     return Depends(get_config)
+
+
+def check_enable(config_type: type[T], key: str):
+    def checker(session_config: T = get_session_config(config_type)):
+        return getattr(session_config, key)
+
+    return Rule(checker)

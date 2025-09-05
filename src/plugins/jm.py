@@ -13,7 +13,7 @@ require("nonebot_plugin_localstore")
 
 from nonebot_plugin_localstore import get_plugin_cache_dir, get_plugin_data_file
 
-from .session_config import get_session_config
+from .session_config import check_enable
 
 
 class Config(BaseModel):
@@ -52,13 +52,9 @@ JmModuleConfig.EXECUTOR_LOG = (  # type: ignore
 JmModuleConfig.AFIELD_ADVICE["pdfname"] = lambda a: f"[{a.id}] {a.title}"
 
 
-def is_enable(session_config: SConfig = get_session_config(SConfig)):
-    return session_config.jm_enabled
-
-
 command = on_command(
     "jmcomic",
-    rule=is_enable,
+    rule=check_enable(SConfig, "jm_enabled"),
     aliases={"jm"},
     force_whitespace=True,
     priority=0,

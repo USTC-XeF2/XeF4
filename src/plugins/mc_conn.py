@@ -155,11 +155,11 @@ async def _(event: GroupMessageEvent, session_config: SConfig = SessionConfig):
 @group_cmd_handler.assign("player")
 async def _(
     event: GroupMessageEvent,
-    player: Match[str],
+    name: Match[str],
     session_config: SConfig = SessionConfig,
 ):
     mcbot = await get_mcbot(event, session_config)
-    if not player.result:
+    if not name.result:
         res = await mcbot.send_rcon_cmd(command="list")
         await group_cmd_handler.finish(
             f"当前玩家列表：{res[0].split(': ')[1].strip()}", reply_message=True
@@ -168,10 +168,10 @@ async def _(
     try:
         for i in c:
             data = await mcbot.send_rcon_cmd(
-                command=f"data get entity {player.result} {i}"
+                command=f"data get entity {name.result} {i}"
             )
             c[i] = data[0].split(": ")[1].strip()
-        text = f"玩家{player.result}信息：\n"
+        text = f"玩家{name.result}信息：\n"
         text += f"生命值: {c['Health'].removesuffix('f')}\n"
         text += f"经验等级: {c['XpLevel']}\n"
         pos_pattern = r"\[(-?\d+)\.\d+d,\s(-?\d+)\.\d+d,\s(-?\d+)\.\d+d\]"
