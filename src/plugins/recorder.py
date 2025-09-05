@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from nonebot import get_plugin_config, logger, require
 from nonebot.adapters.onebot.v11 import (
     Bot,
-    Event,
     FriendRecallNoticeEvent,
     GroupRecallNoticeEvent,
     Message,
     MessageEvent,
+    NoticeEvent,
 )
 from nonebot.adapters.onebot.v11.event import Sender
 from nonebot.message import event_preprocessor
@@ -41,6 +41,14 @@ class RecordMessage:
         return self.sender.card or self.sender.nickname
 
 
+def parse_session(data: MessageEvent | NoticeEvent | dict) -> tuple[str, int, bool]:
+    if not isinstance(data, dict):
+        data = data.model_dump()
+    is_group = "group_id" in data
+    s_id = data["group_id"] if is_group else data["user_id"]
+    return (f"{'group' if is_group else 'private'}-{s_id}", s_id, is_group)
+
+
 class Recorder:
     _recorders: dict[tuple[str, str], Recorder] = {}
 
@@ -52,8 +60,8 @@ class Recorder:
         self.msg_repeat_users: set[int] = set()
 
     @classmethod
-    async def get_by_session_id(cls, bot: Bot, s_id: int, is_group: bool):
-        session_id = f"{'group' if is_group else 'private'}-{s_id}"
+    async def get(cls, bot: Bot, event_or_dict: MessageEvent | NoticeEvent | dict):
+        session_id, s_id, is_group = parse_session(event_or_dict)
         recorder = cls._recorders.get((bot.self_id, session_id))
         if not recorder:
             recorder = Recorder(bot.self_id, session_id)
@@ -67,16 +75,6 @@ class Recorder:
                 recorder.append(msg)
             logger.info(f"get {len(recorder.msg_history)} messages from {session_id}")
         return recorder
-
-    @classmethod
-    async def get(cls, bot: Bot, event: Event):
-        if hasattr(event, "group_id"):
-            s_id = getattr(event, "group_id")
-            is_group = True
-        else:
-            s_id = getattr(event, "user_id")
-            is_group = False
-        return await cls.get_by_session_id(bot, s_id, is_group)
 
     @property
     def cutoff(self):
@@ -166,12 +164,6 @@ async def _(bot, e, api: str, data, result):
         return
     if api not in ["send_msg", "send_group_msg", "send_private_msg"]:
         return
-    if "group_id" in data:
-        s_id = data["group_id"]
-        is_group = True
-    else:
-        s_id = data["user_id"]
-        is_group = False
-    recorder = await Recorder.get_by_session_id(bot, s_id, is_group)
+    recorder = await Recorder.get(bot, data)
     msg = await bot.get_msg(message_id=result["message_id"])
     recorder.append(msg)

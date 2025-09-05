@@ -15,4 +15,4 @@ class Config(BaseModel):
 class SConfig(BaseModel):
     chat_response_level: Literal["disabled", "at", "all"] = "at"
     chat_min_corresponding_length: int = 5
-    chat_prompt: str = ""
+    chat_max_history_length: int = 50

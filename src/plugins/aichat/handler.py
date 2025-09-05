@@ -16,9 +16,10 @@ from nonebot_plugin_alconna import (
     Subcommand,
     on_alconna,
 )
+from nonebot_plugin_localstore import get_plugin_data_file
 
-from ..recorder import Recorder
-from ..session_config import get_config_path, get_session_config, save_config
+from ..recorder import Recorder, parse_session
+from ..session_config import get_session_config
 from .chat import get_image, get_predict, group_chat
 from .config import SConfig
 from .tools import ToolReturn
@@ -65,6 +66,12 @@ chat_command = on_alconna(
 group_message = on_message(rule=should_reply, priority=99)
 
 
+def get_prompt_file(event: MessageEvent):
+    data_file = get_plugin_data_file(f"prompt-{parse_session(event)[0]}.txt")
+    data_file.touch()
+    return data_file
+
+
 async def set_cutoff(bot: Bot, event: MessageEvent, message: str):
     res = await bot.send(event=event, message=message, reply_message=True)
     recorder = await Recorder.get(bot, event)
@@ -73,32 +80,23 @@ async def set_cutoff(bot: Bot, event: MessageEvent, message: str):
 
 
 @chat_command.assign("prompt.set")
-async def _(
-    bot: Bot,
-    event: MessageEvent,
-    prompt: Match[str],
-    session_config: SConfig = SessionConfig,
-):
-    session_config.chat_prompt = prompt.result
-    save_config(get_config_path(event), session_config)
+async def _(bot: Bot, event: MessageEvent, prompt: Match[str]):
+    get_prompt_file(event).write_text(prompt.result, encoding="utf-8")
     await set_cutoff(bot, event, "设置成功")
 
 
 @chat_command.assign("prompt.clear")
-async def _(bot: Bot, event: MessageEvent, session_config: SConfig = SessionConfig):
-    session_config.chat_prompt = ""
-    save_config(get_config_path(event), session_config)
+async def _(bot: Bot, event: MessageEvent):
+    get_prompt_file(event).write_text("", encoding="utf-8")
     await set_cutoff(bot, event, "清空成功")
 
 
 @chat_command.assign("prompt")
-async def _(bot: Bot, event: MessageEvent, session_config: SConfig = SessionConfig):
-    text = (
-        f"当前提示词：\n{session_config.chat_prompt}"
-        if session_config.chat_prompt
-        else "当前未设置提示词"
+async def _(bot: Bot, event: MessageEvent):
+    prompt = get_prompt_file(event).read_text(encoding="utf-8")
+    await set_cutoff(
+        bot, event, f"当前提示词：\n{prompt}" if prompt else "当前未设置提示词"
     )
-    await set_cutoff(bot, event, text)
 
 
 @chat_command.assign("clear")
@@ -114,14 +112,13 @@ async def _(
 
     bot_name = await get_name(bot, event.group_id, int(bot.self_id))
     group_info = await bot.get_group_info(group_id=event.group_id)
+    prompt = get_prompt_file(event).read_text(encoding="utf-8")
     history = [
         await format_message(bot, event.group_id, msg, read_file=True)
-        for msg in recorder.get_messages(50)
+        for msg in recorder.get_messages(session_config.chat_max_history_length)
     ]
 
-    chat_coroutine = group_chat(
-        bot_name, group_info["group_name"], session_config.chat_prompt, history
-    )
+    chat_coroutine = group_chat(bot_name, group_info["group_name"], prompt, history)
     chat_task = asyncio.create_task(chat_coroutine) if event.is_tome() else None
 
     desire_threshold = 3 if event.is_tome() else 9

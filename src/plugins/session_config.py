@@ -3,10 +3,12 @@ from typing import TypeVar
 
 import yaml
 from nonebot import require
-from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageEvent
+from nonebot.adapters.onebot.v11 import MessageEvent, NoticeEvent
 from nonebot.params import Depends
 from nonebot.rule import Rule
 from pydantic import BaseModel
+
+from .recorder import parse_session
 
 require("nonebot_plugin_localstore")
 
@@ -28,27 +30,11 @@ def load_config(config_path: Path, config_type: type[T]):
     return config_type()
 
 
-def save_config(config_path: Path, config: BaseModel):
-    config_path.touch()
-    with config_path.open(encoding="utf-8") as rf:
-        data = yaml.safe_load(rf) or {}
-    with config_path.open("w", encoding="utf-8") as wf:
-        yaml.safe_dump(data | config.model_dump(), wf, allow_unicode=True)
-
-
-def get_config_path(event: MessageEvent):
-    session_id = (
-        event.group_id if isinstance(event, GroupMessageEvent) else event.user_id
-    )
-    return (
-        get_session_config_dir(event.self_id)
-        / f"{event.message_type}-{session_id}.yaml"
-    )
-
-
 def get_session_config(config_type: type[T]):
-    def get_config(event: MessageEvent):
-        return load_config(get_config_path(event), config_type)
+    def get_config(event: MessageEvent | NoticeEvent):
+        session_id = parse_session(event)[0]
+        config_path = get_session_config_dir(event.self_id) / f"{session_id}.yaml"
+        return load_config(config_path, config_type)
 
     return Depends(get_config)
 
