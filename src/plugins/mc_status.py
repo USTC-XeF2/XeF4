@@ -307,9 +307,16 @@ async def _():
             continue
 
         group_id = int(match.group(1))
-        with file.open(encoding="utf-8") as rf:
-            servers = [Server.model_validate(data) for data in yaml.safe_load(rf)]
-        for server in servers:
+        try:
+            with file.open(encoding="utf-8") as rf:
+                data = yaml.safe_load(rf)
+        except Exception as e:
+            logger.warning(f"failed to read {file}: {e}")
+            continue
+        if not data:
+            continue
+
+        for server in map(Server.model_validate, data):
             status = (await get_server_status(server, max_try=2)).status
             if status:
                 add_server_history(group_id, server.name, status.players.online)
