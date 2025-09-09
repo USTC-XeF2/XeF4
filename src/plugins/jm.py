@@ -3,7 +3,7 @@ import json
 import shutil
 import time
 
-from jmcomic import JmModuleConfig
+from jmcomic import JmcomicException, JmModuleConfig
 from nonebot import get_plugin_config, logger, on_command, require
 from nonebot.adapters.onebot.v11 import Message, MessageEvent, MessageSegment
 from nonebot.params import CommandArg
@@ -97,7 +97,13 @@ async def jmcomic(event: MessageEvent, args: Message = CommandArg()):
         pdf_path = get_pdf_path()
         if not pdf_path:
             await command.send(f"正在下载 {comic_id}，请稍等...", reply_message=True)
-            await asyncio.to_thread(jm_option.download_album, comic_id)
+            try:
+                await asyncio.to_thread(jm_option.download_album, comic_id)
+            except JmcomicException as e:
+                logger.error(f"download comic {comic_id} failed: {e.msg}")
+                await command.finish(
+                    f"下载漫画失败: {e.msg.split()[0]}", reply_message=True
+                )
             pdf_path = get_pdf_path()
         if not pdf_path:
             await command.finish("下载漫画失败", reply_message=True)
