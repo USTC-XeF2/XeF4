@@ -59,12 +59,20 @@ async def format_message(
     return f"[{format_time} {role_prefix}{sender_name}]\n{refer}{content}"
 
 
-def convert_messages(messages: list[str], name_map: dict[str, int]):
+def convert_messages(
+    messages: list[str],
+    name_map: dict[str, int],
+    max_count: int = 8,
+    max_length: int = 500,
+):
     sorted_names = sorted(name_map.keys(), key=lambda x: -len(x))
     at_pattern = re.compile("@(" + "|".join(map(re.escape, sorted_names)) + r")")
 
     converted_messages: list[Message] = []
     for msg in messages:
+        if len(msg) > max_length:
+            msg = msg[:max_length].rstrip()
+
         last_idx = 0
         segs = []
         for match in at_pattern.finditer(msg):
@@ -78,5 +86,7 @@ def convert_messages(messages: list[str], name_map: dict[str, int]):
             segs.append(MessageSegment.text(msg[last_idx:]))
         if segs:
             converted_messages.append(Message(segs))
+            if len(converted_messages) >= max_count:
+                break
 
     return converted_messages
