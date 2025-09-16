@@ -2,7 +2,11 @@ import nonebot
 from nonebot.adapters.minecraft import Adapter as MinecraftAdapter
 from nonebot.adapters.onebot.v11 import Adapter as OnebotAdapter
 
-nonebot.init()
+nonebot.init(
+    driver="~fastapi+~websockets",
+    alconna_use_command_start=True,
+    localstore_use_cwd=True,
+)
 
 driver = nonebot.get_driver()
 driver.register_adapter(OnebotAdapter)

@@ -86,7 +86,6 @@ command = on_alconna(
     ),
     rule=check_enable(SConfig, "mc_status_enabled"),
     aliases={"mcs", "s"},
-    use_cmd_start=True,
     priority=0,
     block=True,
 )

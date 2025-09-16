@@ -47,7 +47,6 @@ group_cmd_handler = on_alconna(
     ),
     rule=is_enabled,
     aliases={"mcc"},
-    use_cmd_start=True,
     priority=0,
     block=True,
 )

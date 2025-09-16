@@ -59,7 +59,6 @@ chat_command = on_alconna(
         Option("clear", help_text="清空消息记录"),
         meta=CommandMeta(description="机器人聊天控制指令", compact=True),
     ),
-    use_cmd_start=True,
     priority=0,
     block=True,
 )
