@@ -16,6 +16,8 @@ from nonebot.adapters.onebot.v11.event import Sender
 from nonebot.message import event_preprocessor
 from pydantic import BaseModel
 
+from .interceptor import parse_session as _parse_session
+
 require("nonebot_plugin_localstore")
 
 from nonebot_plugin_localstore import get_plugin_data_file
@@ -41,12 +43,9 @@ class RecordMessage:
         return self.sender.card or self.sender.nickname
 
 
-def parse_session(data: MessageEvent | NoticeEvent | dict) -> tuple[str, int, bool]:
-    if not isinstance(data, dict):
-        data = data.model_dump()
-    is_group = "group_id" in data
-    s_id = data["group_id"] if is_group else data["user_id"]
-    return (f"{'group' if is_group else 'private'}-{s_id}", s_id, is_group)
+def parse_session(event: MessageEvent | NoticeEvent | dict) -> tuple[str, int, bool]:
+    s_id, is_group = _parse_session(event)
+    return f"{'group' if is_group else 'private'}-{s_id}", s_id, is_group
 
 
 class Recorder:
