@@ -10,12 +10,12 @@ from nonebot.adapters.onebot.v11 import (
     GroupRecallNoticeEvent,
     Message,
     MessageEvent,
-    NoticeEvent,
 )
 from nonebot.adapters.onebot.v11.event import Sender
 from nonebot.message import event_preprocessor
 from pydantic import BaseModel
 
+from .interceptor import RecordedEvent
 from .interceptor import parse_session as _parse_session
 
 require("nonebot_plugin_localstore")
@@ -43,7 +43,7 @@ class RecordMessage:
         return self.sender.card or self.sender.nickname
 
 
-def parse_session(event: MessageEvent | NoticeEvent | dict) -> tuple[str, int, bool]:
+def parse_session(event: RecordedEvent | dict) -> tuple[str, int, bool]:
     s_id, is_group = _parse_session(event)
     return f"{'group' if is_group else 'private'}-{s_id}", s_id, is_group
 
@@ -59,7 +59,7 @@ class Recorder:
         self.msg_repeat_users: set[int] = set()
 
     @classmethod
-    async def get(cls, bot: Bot, event_or_dict: MessageEvent | NoticeEvent | dict):
+    async def get(cls, bot: Bot, event_or_dict: RecordedEvent | dict):
         session_id, s_id, is_group = parse_session(event_or_dict)
         recorder = cls._recorders.get((bot.self_id, session_id))
         if not recorder:

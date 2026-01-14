@@ -3,11 +3,11 @@ from typing import TypeVar
 
 import yaml
 from nonebot import require
-from nonebot.adapters.onebot.v11 import MessageEvent, NoticeEvent
 from nonebot.params import Depends
 from nonebot.rule import Rule
 from pydantic import BaseModel
 
+from .interceptor import RecordedEvent
 from .recorder import parse_session
 
 require("nonebot_plugin_localstore")
@@ -31,7 +31,7 @@ def load_config(config_path: Path, config_type: type[T]):
 
 
 def get_session_config(config_type: type[T]):
-    def get_config(event: MessageEvent | NoticeEvent):
+    def get_config(event: RecordedEvent):
         session_id = parse_session(event)[0]
         config_path = get_session_config_dir(event.self_id) / f"{session_id}.yaml"
         return load_config(config_path, config_type)

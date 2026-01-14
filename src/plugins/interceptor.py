@@ -10,11 +10,13 @@ require("nonebot_plugin_localstore")
 
 from nonebot_plugin_localstore import get_config_file
 
+RecordedEvent = MessageEvent | NoticeEvent
 
-def parse_session(data: MessageEvent | NoticeEvent | dict) -> tuple[int, bool]:
+
+def parse_session(data: RecordedEvent | dict) -> tuple[int, bool]:
     if not isinstance(data, dict):
         data = data.model_dump()
-    is_group = "group_id" in data
+    is_group = data.get("group_id") is not None
     return data["group_id"] if is_group else data["user_id"], is_group
 
 
