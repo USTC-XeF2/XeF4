@@ -1,11 +1,12 @@
 import asyncio
+import base64
 import json
 import shutil
 import time
 
 from jmcomic import JmcomicException, JmModuleConfig
 from nonebot import get_plugin_config, logger, on_command, require
-from nonebot.adapters.onebot.v11 import Message, MessageEvent, MessageSegment
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 from nonebot.params import CommandArg
 from pydantic import BaseModel
 
@@ -72,7 +73,7 @@ user_locks: dict[str, asyncio.Lock] = {}
 
 
 @command.handle()
-async def jmcomic(event: MessageEvent, args: Message = CommandArg()):
+async def jmcomic(bot: Bot, event: MessageEvent, args: Message = CommandArg()):
     if len(args) == 0:
         await command.finish("请指定漫画ID", reply_message=True)
     comic_id = args.extract_plain_text().strip()
@@ -114,14 +115,16 @@ async def jmcomic(event: MessageEvent, args: Message = CommandArg()):
 
         await command.send(f"正在发送 {pdf_path.name}，请稍等...", reply_message=True)
         try:
-            await command.send(
-                MessageSegment(
-                    "file",
-                    {
-                        "name": pdf_path.name,
-                        "file": str(pdf_path),
-                    },
-                )
+            id_type = "user_id" if event.message_type == "private" else "group_id"
+            content = base64.b64encode(pdf_path.read_bytes()).decode()
+
+            await bot.call_api(
+                f"upload_{event.message_type}_file",
+                **{
+                    id_type: getattr(event, id_type),
+                    "file": f"base64://{content}",
+                    "name": pdf_path.name,
+                },
             )
         except Exception as e:
             logger.error(f"send file failed: {e}")
