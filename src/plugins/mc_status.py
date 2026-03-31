@@ -241,6 +241,7 @@ async def _(event: GroupMessageEvent, server: Match[str], days: Match[int]):
     ax.plot(times, onlines, marker=".", linestyle="-")
     ax.xaxis.set_major_formatter(DateFormatter("%m-%d %H:%M"))
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.set_ylim(bottom=0)
     ax.set_title(f"{valid_server.name} 近{days.result}天在线人数变化")
     fig.tight_layout()
 

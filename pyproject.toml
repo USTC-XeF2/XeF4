@@ -3,23 +3,28 @@ name = "XeF4"
 version = "1.0.0"
 description = "A multifunctional QQ robot"
 readme = "README.md"
-requires-python = ">=3.9, <4.0"
+requires-python = ">=3.10, <4.0"
 dependencies = [
-    "beautifulsoup4>=4.13",
-    "ddgs>=9.5",
+    "beautifulsoup4>=4.14",
+    "ddgs>=9.12",
     "img2pdf>=0.6",
     "jmcomic>=2.6",
-    "langchain>=0.3",
-    "langchain-community>=0.3",
-    "langchain-openai>=0.3",
-    "matplotlib>=3.9",
-    "mcstatus>=12.0",
-    "nonebot-adapter-minecraft>=1.4",
+    "langchain~=0.3",
+    "langchain-community~=0.3",
+    "langchain-openai~=0.3",
+    "matplotlib>=3.10",
+    "mcstatus>=13.0",
+    "nonebot-adapter-minecraft>=1.8",
     "nonebot-adapter-onebot>=2.4",
-    "nonebot-plugin-alconna>=0.59",
+    "nonebot-plugin-alconna>=0.61",
     "nonebot-plugin-apscheduler>=0.5",
     "nonebot-plugin-localstore>=0.7",
     "nonebot2[fastapi,websockets]>=2.4",
+]
+
+[dependency-groups]
+dev = [
+    "ruff~=0.15",
 ]
 
 [tool.nonebot]
@@ -31,5 +36,5 @@ plugins = ["nonebot_plugin_alconna", "nonebot_plugin_apscheduler", "nonebot_plug
 plugin_dirs = ["src/plugins"]
 builtin_plugins = []
 
-[tool.ruff]
+[tool.ruff.lint]
 ignore = ["E402"]

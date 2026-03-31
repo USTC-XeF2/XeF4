@@ -41,7 +41,7 @@ async def format_message(
             else:
                 content += "@全体成员"
         elif msg_seg.type == "image":
-            if msg_seg.data["summary"]:
+            if msg_seg.data.get("summary"):
                 content += msg_seg.data["summary"]
             else:
                 content += "[图片:]"

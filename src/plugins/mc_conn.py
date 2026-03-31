@@ -1,8 +1,12 @@
 import re
 
 from nonebot import get_bot, get_bots, on_type, require
-from nonebot.adapters.minecraft import BaseChatEvent, BaseDeathEvent, BaseJoinEvent
 from nonebot.adapters.minecraft import Bot as MCBot
+from nonebot.adapters.minecraft import (
+    PlayerChatEvent,
+    PlayerDeathEvent,
+    PlayerJoinEvent,
+)
 from nonebot.adapters.onebot.v11 import Bot as OneBot
 from nonebot.adapters.onebot.v11 import GroupMessageEvent
 from nonebot.rule import startswith
@@ -33,9 +37,9 @@ def is_enabled(session_config: SConfig = SessionConfig):
     return len(session_config.mc_conn_servers) > 0
 
 
-mc_msg_handler = on_type(BaseChatEvent, rule=startswith("#"))
-mc_death_handler = on_type(BaseDeathEvent)
-mc_join_handler = on_type(BaseJoinEvent)
+mc_msg_handler = on_type(PlayerChatEvent, rule=startswith("#"))
+mc_death_handler = on_type(PlayerDeathEvent)
+mc_join_handler = on_type(PlayerJoinEvent)
 group_cmd_handler = on_alconna(
     Alconna(
         "mc-conn",
@@ -66,7 +70,7 @@ async def send_to_qq(server_name: str, username: str | None, message: str):
 
 
 @mc_msg_handler.handle()
-async def _(bot: MCBot, event: BaseChatEvent):
+async def _(bot: MCBot, event: PlayerChatEvent):
     text = event.get_plaintext()[1:]
     if text:
         await send_to_qq(event.server_name, event.player.nickname, text)
@@ -74,16 +78,16 @@ async def _(bot: MCBot, event: BaseChatEvent):
 
 
 @mc_death_handler.handle()
-async def _(event: BaseDeathEvent):
+async def _(event: PlayerDeathEvent):
     if not event.player.nickname.startswith("bot_"):
-        await send_to_qq(event.server_name, None, event.message.extract_plain_text())
+        await send_to_qq(event.server_name, None, event.get_event_description())
 
 
 recent_join_players: dict[str, int] = {}
 
 
 @mc_join_handler.handle()
-async def _(event: BaseJoinEvent):
+async def _(event: PlayerJoinEvent):
     name = event.player.nickname
     if (
         not name.startswith("bot_")
