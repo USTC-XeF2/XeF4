@@ -17,11 +17,10 @@ from nonebot import get_plugin_config, logger, require
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment
 from pydantic import BaseModel
 
-from .session_config import check_enable
-
 require("nonebot_plugin_alconna")
 require("nonebot_plugin_apscheduler")
 require("nonebot_plugin_localstore")
+require("nonebot_plugin_session_config")
 
 from nonebot_plugin_alconna import (
     Alconna,
@@ -35,6 +34,7 @@ from nonebot_plugin_alconna import (
 )
 from nonebot_plugin_apscheduler import scheduler
 from nonebot_plugin_localstore import get_plugin_data_dir, get_plugin_data_file
+from nonebot_plugin_session_config import BaseSessionConfig, check_enabled
 
 
 class Config(BaseModel):
@@ -42,7 +42,7 @@ class Config(BaseModel):
     mc_status_max_history_days: int = 30
 
 
-class SConfig(BaseModel):
+class SessionConfig(BaseSessionConfig):
     mc_status_enabled: bool = False
 
 
@@ -84,7 +84,7 @@ command = on_alconna(
         Args["server", str, None],
         meta=CommandMeta(description="获取 Minecraft 服务器信息", compact=True),
     ),
-    rule=check_enable(SConfig, "mc_status_enabled"),
+    rule=check_enabled(SessionConfig, "mc_status_enabled"),
     aliases={"mcs", "s"},
     priority=0,
     block=True,

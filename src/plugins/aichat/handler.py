@@ -19,19 +19,15 @@ from nonebot_plugin_alconna import (
 from nonebot_plugin_localstore import get_plugin_data_file
 
 from ..recorder import Recorder, parse_session
-from ..session_config import get_session_config
 from .chat import get_image, get_predict, group_chat
-from .config import SConfig
+from .config import SessionConfig
 from .tools import ToolReturn
 from .utils import convert_messages, format_message, get_name
 
-SessionConfig = get_session_config(SConfig)
 uin_range = None
 
 
-async def should_reply(
-    bot: Bot, event: MessageEvent, session_config: SConfig = SessionConfig
-):
+async def should_reply(bot: Bot, event: MessageEvent, session_config: SessionConfig):
     global uin_range
     if uin_range is None:
         uin_range = await bot.get_robot_uin_range()
@@ -104,9 +100,7 @@ async def _(bot: Bot, event: MessageEvent):
 
 
 @group_message.handle()
-async def _(
-    bot: Bot, event: GroupMessageEvent, session_config: SConfig = SessionConfig
-):
+async def _(bot: Bot, event: GroupMessageEvent, session_config: SessionConfig):
     recorder = await Recorder.get(bot, event)
 
     bot_name = await get_name(bot, event.group_id, int(bot.self_id))

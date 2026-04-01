@@ -19,7 +19,8 @@ dependencies = [
     "nonebot-plugin-alconna>=0.61",
     "nonebot-plugin-apscheduler>=0.5",
     "nonebot-plugin-localstore>=0.7",
-    "nonebot2[fastapi,websockets]>=2.4",
+    "nonebot-plugin-session-config>=1.0",
+    "nonebot2[fastapi,websockets]>=2.5",
 ]
 
 [dependency-groups]
@@ -28,13 +29,16 @@ dev = [
 ]
 
 [tool.nonebot]
-adapters = [
-    { name = "OneBot V11", module_name = "nonebot.adapters.onebot.v11" },
-    { name = "Minecraft", module_name = "nonebot.adapters.minecraft" }
-]
-plugins = ["nonebot_plugin_alconna", "nonebot_plugin_apscheduler", "nonebot_plugin_localstore"]
 plugin_dirs = ["src/plugins"]
 builtin_plugins = []
+
+[tool.nonebot.plugins]
+"@local" = []
+
+[tool.nonebot.adapters]
+"@local" = []
+nonebot-adapter-onebot = [{name = "OneBot V11", module_name = "nonebot.adapters.onebot.v11"}]
+nonebot-adapter-minecraft = [{name = "Minecraft", module_name = "nonebot.adapters.minecraft"}]
 
 [tool.ruff.lint]
 ignore = ["E402"]

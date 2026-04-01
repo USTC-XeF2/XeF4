@@ -6,6 +6,7 @@ nonebot.init(
     driver="~fastapi+~websockets",
     alconna_use_command_start=True,
     localstore_use_cwd=True,
+    session_config_enable_param=True,
 )
 
 driver = nonebot.get_driver()

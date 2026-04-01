@@ -10,11 +10,9 @@ from nonebot.adapters.minecraft import (
 from nonebot.adapters.onebot.v11 import Bot as OneBot
 from nonebot.adapters.onebot.v11 import GroupMessageEvent
 from nonebot.rule import startswith
-from pydantic import BaseModel
-
-from .session_config import get_session_config, get_session_config_dir, load_config
 
 require("nonebot_plugin_alconna")
+require("nonebot_plugin_session_config")
 
 from nonebot_plugin_alconna import (
     Alconna,
@@ -24,17 +22,15 @@ from nonebot_plugin_alconna import (
     Subcommand,
     on_alconna,
 )
+from nonebot_plugin_session_config import (
+    BaseSessionConfig,
+    check_condition,
+    traverse_session_configs,
+)
 
 
-class SConfig(BaseModel):
+class SessionConfig(BaseSessionConfig):
     mc_conn_servers: list[str] = []
-
-
-SessionConfig = get_session_config(SConfig)
-
-
-def is_enabled(session_config: SConfig = SessionConfig):
-    return len(session_config.mc_conn_servers) > 0
 
 
 mc_msg_handler = on_type(PlayerChatEvent, rule=startswith("#"))
@@ -49,7 +45,7 @@ group_cmd_handler = on_alconna(
         Subcommand("time", help_text="查询服务器时间"),
         meta=CommandMeta(description="Minecraft 服务器互通指令"),
     ),
-    rule=is_enabled,
+    rule=check_condition(SessionConfig, lambda c: len(c.mc_conn_servers) > 0),
     aliases={"mcc"},
     priority=0,
     block=True,
@@ -60,12 +56,13 @@ async def send_to_qq(server_name: str, username: str | None, message: str):
     for bot in get_bots().values():
         if not isinstance(bot, OneBot):
             continue
-        for group_file in get_session_config_dir(bot.self_id).glob("group-*.yaml"):
-            if server_name in load_config(group_file, SConfig).mc_conn_servers:
-                group_id = int(group_file.name[6:-5])
+        for scene, config in traverse_session_configs(
+            bot.self_id, SessionConfig
+        ).items():
+            if scene[0] == "group" and server_name in config.mc_conn_servers:
                 name = f"{server_name} {username}" if username else server_name
                 await bot.send_group_msg(
-                    group_id=group_id, message=f"<{name}> {message}"
+                    group_id=int(scene[1]), message=f"<{name}> {message}"
                 )
 
 
@@ -100,7 +97,7 @@ async def _(event: PlayerJoinEvent):
 player_server_map = dict[str, str]()
 
 
-async def get_mcbot(event: GroupMessageEvent, session_config: SConfig):
+async def get_mcbot(event: GroupMessageEvent, session_config: SessionConfig):
     player_server = player_server_map.get(event.get_session_id())
     if not player_server and len(session_config.mc_conn_servers) == 1:
         player_server = session_config.mc_conn_servers[0]
@@ -116,7 +113,7 @@ async def get_mcbot(event: GroupMessageEvent, session_config: SConfig):
 async def _(
     event: GroupMessageEvent,
     server: Match[str],
-    session_config: SConfig = SessionConfig,
+    session_config: SessionConfig,
 ):
     if server.result in session_config.mc_conn_servers:
         player_server_map[event.get_session_id()] = server.result
@@ -131,7 +128,7 @@ async def _(
     bot: OneBot,
     event: GroupMessageEvent,
     message: Match[str],
-    session_config: SConfig = SessionConfig,
+    session_config: SessionConfig,
 ):
     mcbot = await get_mcbot(event, session_config)
     if not message.result:
@@ -142,7 +139,7 @@ async def _(
 
 
 @group_cmd_handler.assign("time")
-async def _(event: GroupMessageEvent, session_config: SConfig = SessionConfig):
+async def _(event: GroupMessageEvent, session_config: SessionConfig):
     mcbot = await get_mcbot(event, session_config)
     res = await mcbot.send_rcon_cmd(command="time query gametime")
     gametime = int(res[0].removeprefix("The time is "))
@@ -159,7 +156,7 @@ async def _(event: GroupMessageEvent, session_config: SConfig = SessionConfig):
 async def _(
     event: GroupMessageEvent,
     name: Match[str],
-    session_config: SConfig = SessionConfig,
+    session_config: SessionConfig,
 ):
     mcbot = await get_mcbot(event, session_config)
     if not name.result:
@@ -187,7 +184,7 @@ async def _(
 
 
 @group_cmd_handler.handle()
-async def _(event: GroupMessageEvent, session_config: SConfig = SessionConfig):
+async def _(event: GroupMessageEvent, session_config: SessionConfig):
     msg = "可用服务器: " + ", ".join(session_config.mc_conn_servers)
     player_server = player_server_map.get(event.get_session_id())
     if not player_server and len(session_config.mc_conn_servers) == 1:

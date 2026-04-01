@@ -11,17 +11,17 @@ from nonebot.params import CommandArg
 from pydantic import BaseModel
 
 require("nonebot_plugin_localstore")
+require("nonebot_plugin_session_config")
 
 from nonebot_plugin_localstore import get_plugin_cache_dir, get_plugin_data_file
-
-from .session_config import check_enable
+from nonebot_plugin_session_config import BaseSessionConfig, check_enabled
 
 
 class Config(BaseModel):
     jm_max_downloads: int = 3
 
 
-class SConfig(BaseModel):
+class SessionConfig(BaseSessionConfig):
     jm_enabled: bool = False
 
 
@@ -55,7 +55,7 @@ JmModuleConfig.AFIELD_ADVICE["pdfname"] = lambda a: f"[{a.id}] {a.title}"
 
 command = on_command(
     "jmcomic",
-    rule=check_enable(SConfig, "jm_enabled"),
+    rule=check_enabled(SessionConfig, "jm_enabled"),
     aliases={"jm"},
     force_whitespace=True,
     priority=0,
